@@ -1,0 +1,407 @@
+#include "tool_registry.h"
+#include "mimi_config.h"
+#include "tools/tool_web_search.h"
+#include "tools/tool_get_time.h"
+#include "tools/tool_files.h"
+#include "tools/tool_cron.h"
+#include "tools/tool_lua.h"
+
+#include <string.h>
+#include <stdlib.h>
+#include "esp_log.h"
+#include "cJSON.h"
+
+static const char *TAG = "tools";
+
+#define MAX_TOOLS 32
+
+static mimi_tool_t s_tools[MAX_TOOLS];
+static int s_tool_count = 0;
+static int s_builtin_count = 0;  /* Count of tools registered at init (not dynamic) */
+static char *s_tools_json = NULL;  /* cached JSON array string */
+
+static void register_tool(const mimi_tool_t *tool)
+{
+    if (s_tool_count >= MAX_TOOLS) {
+        ESP_LOGE(TAG, "Tool registry full");
+        return;
+    }
+    s_tools[s_tool_count++] = *tool;
+    ESP_LOGI(TAG, "Registered tool: %s (concurrency_safe=%d)", tool->name, tool->concurrency_safe);
+}
+
+static void build_tools_json(void);
+
+esp_err_t tool_registry_add(const mimi_tool_t *tool)
+{
+    /* Check for duplicate - replace existing entry if found */
+    for (int i = 0; i < s_tool_count; i++) {
+        if (strcmp(s_tools[i].name, tool->name) == 0) {
+            s_tools[i] = *tool;
+            ESP_LOGI(TAG, "Replaced tool: %s", tool->name);
+            return ESP_OK;
+        }
+    }
+
+    if (s_tool_count >= MAX_TOOLS) {
+        ESP_LOGE(TAG, "Tool registry full, cannot add: %s", tool->name);
+        return ESP_ERR_NO_MEM;
+    }
+    s_tools[s_tool_count++] = *tool;
+    ESP_LOGI(TAG, "Added tool: %s", tool->name);
+    /* Note: Caller should call tool_registry_rebuild_json() after adding multiple tools */
+    return ESP_OK;
+}
+
+esp_err_t tool_registry_remove(const char *name)
+{
+    for (int i = 0; i < s_tool_count; i++) {
+        if (strcmp(s_tools[i].name, name) == 0) {
+            /* Shift remaining tools down */
+            for (int j = i; j < s_tool_count - 1; j++) {
+                s_tools[j] = s_tools[j + 1];
+            }
+            s_tool_count--;
+            ESP_LOGI(TAG, "Removed tool: %s", name);
+            return ESP_OK;
+        }
+    }
+    ESP_LOGW(TAG, "Tool not found for removal: %s", name);
+    return ESP_ERR_NOT_FOUND;
+}
+
+void tool_registry_clear_dynamic(void)
+{
+    int dynamic_count = s_tool_count - s_builtin_count;
+    if (dynamic_count <= 0) {
+        ESP_LOGI(TAG, "No dynamic tools to clear");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Clearing %d dynamic tools (builtin: %d, total: %d)",
+             dynamic_count, s_builtin_count, s_tool_count);
+    s_tool_count = s_builtin_count;
+    ESP_LOGI(TAG, "Dynamic tools cleared, %d tools remain", s_tool_count);
+}
+
+void tool_registry_rebuild_json(void)
+{
+    build_tools_json();
+}
+
+static void build_tools_json(void)
+{
+    cJSON *arr = cJSON_CreateArray();
+
+    for (int i = 0; i < s_tool_count; i++) {
+        cJSON *tool = cJSON_CreateObject();
+        cJSON_AddStringToObject(tool, "name", s_tools[i].name);
+        cJSON_AddStringToObject(tool, "description", s_tools[i].description);
+
+        cJSON *schema = cJSON_Parse(s_tools[i].input_schema_json);
+        if (schema) {
+            cJSON_AddItemToObject(tool, "input_schema", schema);
+        }
+
+        cJSON_AddItemToArray(arr, tool);
+    }
+
+    free(s_tools_json);
+    s_tools_json = cJSON_PrintUnformatted(arr);
+    cJSON_Delete(arr);
+
+    ESP_LOGI(TAG, "Tools JSON built (%d tools)", s_tool_count);
+}
+
+esp_err_t tool_registry_init(void)
+{
+    s_tool_count = 0;
+
+    /* Register web_search - network call, safe to batch */
+    tool_web_search_init();
+    {
+        static mimi_tool_t ws = {
+            .name = "web_search",
+            .description = "Search the web for current information via Tavily (preferred) or Brave when configured.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"The search query\"}},"
+                "\"required\":[\"query\"]}",
+            .execute = tool_web_search_execute,
+            .concurrency_safe = true,
+            .prepare = NULL,
+        };
+        register_tool(&ws);
+    }
+
+    /* Register get_datetime - pure read, safe */
+    {
+        static mimi_tool_t gt = {
+            .name = "get_datetime",
+            .description = "Get the current date and time. Also sets the system clock. Call this when you need to know what time or date it is.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{},"
+                "\"required\":[]}",
+            .execute = tool_get_datetime_execute,
+            .concurrency_safe = true,
+            .prepare = NULL,
+        };
+        register_tool(&gt);
+    }
+
+    /* Register get_unix_timestamp - returns unix timestamp for cron calculations */
+    {
+        static mimi_tool_t un = {
+            .name = "get_unix_timestamp",
+            .description = "Get the current unix timestamp in seconds. Use this when you need to calculate absolute times for cron_add with at_epoch.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{},"
+                "\"required\":[]}",
+            .execute = tool_get_unix_timestamp_execute,
+            .concurrency_safe = true,
+            .prepare = NULL,
+        };
+        register_tool(&un);
+    }
+
+    /* Register read_file - safe read, can batch */
+    {
+        static mimi_tool_t rf = {
+            .name = "read_file",
+            .description = "Read a file from FATFS storage. Path must start with " MIMI_FATFS_BASE "/.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"Absolute path starting with " MIMI_FATFS_BASE "/\"}},"
+                "\"required\":[\"path\"]}",
+            .execute = tool_read_file_execute,
+            .concurrency_safe = true,
+            .prepare = NULL,
+        };
+        register_tool(&rf);
+    }
+
+    /* Register write_file - NOT safe, modifies filesystem */
+    {
+        static mimi_tool_t wf = {
+            .name = "write_file",
+            .description = "Write or overwrite a file on FATFS storage. Path must start with " MIMI_FATFS_BASE "/.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"Absolute path starting with " MIMI_FATFS_BASE "/\"},"
+                "\"content\":{\"type\":\"string\",\"description\":\"File content to write\"}},"
+                "\"required\":[\"path\",\"content\"]}",
+            .execute = tool_write_file_execute,
+            .concurrency_safe = false,  /* modifies filesystem */
+            .prepare = NULL,
+        };
+        register_tool(&wf);
+    }
+
+    /* Register edit_file - NOT safe, modifies filesystem */
+    {
+        static mimi_tool_t ef = {
+            .name = "edit_file",
+            .description = "Find and replace text in a file on FATFS. Replaces first occurrence of old_string with new_string.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"Absolute path starting with " MIMI_FATFS_BASE "/\"},"
+                "\"old_string\":{\"type\":\"string\",\"description\":\"Text to find\"},"
+                "\"new_string\":{\"type\":\"string\",\"description\":\"Replacement text\"}},"
+                "\"required\":[\"path\",\"old_string\",\"new_string\"]}",
+            .execute = tool_edit_file_execute,
+            .concurrency_safe = false,  /* modifies filesystem */
+            .prepare = NULL,
+        };
+        register_tool(&ef);
+    }
+
+    /* Register list_dir - safe read */
+    {
+        static mimi_tool_t ld = {
+            .name = "list_dir",
+            .description = "List files on FATFS storage, optionally filtered by path prefix.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{\"prefix\":{\"type\":\"string\",\"description\":\"Optional path prefix filter, e.g. " MIMI_FATFS_BASE "/memory/\"}},"
+                "\"required\":[]}",
+            .execute = tool_list_dir_execute,
+            .concurrency_safe = true,
+            .prepare = NULL,
+        };
+        register_tool(&ld);
+    }
+
+    /* Register cron_add - NOT safe, modifies cron state */
+    {
+        static mimi_tool_t ca = {
+            .name = "cron_add",
+            .description = "Schedule a timed reminder or recurring task. For one-shot: use 'remind_in_seconds' (e.g. 180 for 3 minutes). For recurring: use 'every' with 'interval_s' (e.g. 3600 for hourly). The message will trigger an agent turn when the job fires.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{"
+                "\"name\":{\"type\":\"string\",\"description\":\"Short name for the job\"},"
+                "\"schedule_type\":{\"type\":\"string\",\"description\":\"'every' for recurring interval or 'at' for one-shot\"},"
+                "\"interval_s\":{\"type\":\"integer\",\"description\":\"Interval in seconds for 'every' (e.g. 3600 for hourly)\"},"
+                "\"remind_in_seconds\":{\"type\":\"integer\",\"description\":\"Seconds from now to fire for 'at' (e.g. 180 for 3 minutes)\"},"
+                "\"at_epoch\":{\"type\":\"integer\",\"description\":\"Unix timestamp to fire at for 'at' (optional, use remind_in_seconds instead)\"},"
+                "\"message\":{\"type\":\"string\",\"description\":\"Message to inject when the job fires, triggering an agent turn\"},"
+                "\"channel\":{\"type\":\"string\",\"description\":\"Optional reply channel (e.g. 'telegram'). If omitted, current turn channel is used\"},"
+                "\"chat_id\":{\"type\":\"string\",\"description\":\"Optional reply chat_id. Required when channel='telegram'\"}"
+                "},"
+                "\"required\":[\"name\",\"schedule_type\",\"message\"]}",
+            .execute = tool_cron_add_execute,
+            .concurrency_safe = false,  /* modifies cron state */
+            .prepare = NULL,
+        };
+        register_tool(&ca);
+    }
+
+    /* Register cron_list - safe read */
+    {
+        static mimi_tool_t cl = {
+            .name = "cron_list",
+            .description = "List all scheduled cron jobs with their status, schedule, and IDs.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{},"
+                "\"required\":[]}",
+            .execute = tool_cron_list_execute,
+            .concurrency_safe = true,
+            .prepare = NULL,
+        };
+        register_tool(&cl);
+    }
+
+    /* Register cron_remove - NOT safe, modifies cron state */
+    {
+        static mimi_tool_t cr = {
+            .name = "cron_remove",
+            .description = "Remove a scheduled cron job by its ID.",
+            .input_schema_json =
+                "{\"type\":\"object\","
+                "\"properties\":{\"job_id\":{\"type\":\"string\",\"description\":\"The 8-character job ID to remove\"}},"
+                "\"required\":[\"job_id\"]}",
+            .execute = tool_cron_remove_execute,
+            .concurrency_safe = false,  /* modifies cron state */
+            .prepare = NULL,
+        };
+        register_tool(&cr);
+    }
+
+    /* Register Lua tools */
+    mimi_tool_t le = {
+        .name = "lua_eval",
+        .description = "Evaluate and execute a Lua code string directly. Use this to run quick Lua snippets or test Lua code.",
+        .input_schema_json =
+            "{\"type\":\"object\","
+            "\"properties\":{\"code\":{\"type\":\"string\",\"description\":\"Lua code to execute\"}},"
+            "\"required\":[\"code\"]}",
+        .execute = tool_lua_eval_execute,
+    };
+    register_tool(&le);
+
+    mimi_tool_t lr = {
+        .name = "lua_run",
+        .description = "Execute a Lua script stored in FATFS. Path must start with " MIMI_FATFS_BASE "/lua/.",
+        .input_schema_json =
+            "{\"type\":\"object\","
+            "\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"Path to Lua script starting with " MIMI_FATFS_BASE "/lua/\"}},"
+            "\"required\":[\"path\"]}",
+        .execute = tool_lua_run_execute,
+    };
+    register_tool(&lr);
+
+    /* Record the count of built-in tools (before any dynamic additions) */
+    s_builtin_count = s_tool_count;
+
+    build_tools_json();
+
+    ESP_LOGI(TAG, "Tool registry initialized with %d tools", s_tool_count);
+    return ESP_OK;
+}
+
+const char *tool_registry_get_tools_json(void)
+{
+    return s_tools_json;
+}
+
+const mimi_tool_t *tool_registry_get(const char *name)
+{
+    for (int i = 0; i < s_tool_count; i++) {
+        if (strcmp(s_tools[i].name, name) == 0) {
+            return &s_tools[i];
+        }
+    }
+    return NULL;
+}
+
+bool tool_registry_is_concurrency_safe(const char *name)
+{
+    const mimi_tool_t *tool = tool_registry_get(name);
+    return tool ? tool->concurrency_safe : false;
+}
+
+esp_err_t tool_registry_execute(const char *name, const char *input_json,
+                                char *output, size_t output_size)
+{
+    const mimi_tool_t *tool = tool_registry_get(name);
+    if (!tool) {
+        ESP_LOGW(TAG, "Unknown tool: %s", name);
+        snprintf(output, output_size, "Error: unknown tool '%s'", name);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    ESP_LOGI(TAG, "Executing tool: %s", name);
+
+    /* Run prepare hook if set */
+    if (tool->prepare) {
+        char *input_copy = strndup(input_json, 4096);
+        if (!input_copy) {
+            snprintf(output, output_size, "Error: memory allocation failed");
+            return ESP_ERR_NO_MEM;
+        }
+
+        char *error = tool->prepare(name, input_copy);
+        if (error) {
+            ESP_LOGW(TAG, "Tool %s prepare failed: %s", name, error);
+            snprintf(output, output_size, "Error: %s", error);
+            free(error);
+            free(input_copy);
+            return ESP_ERR_INVALID_ARG;
+        }
+
+        esp_err_t err = tool->execute(input_copy, output, output_size);
+        free(input_copy);
+        return err;
+    }
+
+    return tool->execute(input_json, output, output_size);
+}
+
+esp_err_t tool_registry_execute_prepared(const char *name, char *input_json,
+                                         char *output, size_t output_size)
+{
+    const mimi_tool_t *tool = tool_registry_get(name);
+    if (!tool) {
+        ESP_LOGW(TAG, "Unknown tool: %s", name);
+        snprintf(output, output_size, "Error: unknown tool '%s'", name);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    ESP_LOGI(TAG, "Executing tool (prepared): %s", name);
+
+    /* Run prepare hook if set */
+    if (tool->prepare) {
+        char *error = tool->prepare(name, input_json);
+        if (error) {
+            ESP_LOGW(TAG, "Tool %s prepare failed: %s", name, error);
+            snprintf(output, output_size, "Error: %s", error);
+            free(error);
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+
+    return tool->execute(input_json, output, output_size);
+}
