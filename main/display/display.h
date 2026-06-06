@@ -32,7 +32,7 @@ public:
         TYPE_LCD,
         TYPE_EMOTE,
         TYPE_NO_DISPLAY,
-        TYPE_OLED  // <-- Добавлено для OLED
+        TYPE_OLED
     };
 
     Display();
@@ -41,6 +41,8 @@ public:
     // Виртуальный метод для проверки типа (замена dynamic_cast)
     virtual Type GetDisplayType() const { return TYPE_UNKNOWN; }
 
+    // ⚠️ ВАЖНО: Здесь НЕ должно быть закрывающей скобки };
+    // Все методы должны находиться ВНУТРИ класса
     virtual void SetStatus(const char* status);
     virtual void ShowNotification(const char* notification, int duration_ms = 3000);
     virtual void ShowNotification(const std::string &notification, int duration_ms = 3000);
@@ -68,7 +70,7 @@ protected:
     friend class DisplayLockGuard;
     virtual bool Lock(int timeout_ms = 0) = 0;
     virtual void Unlock() = 0;
-};
+}; // <-- Класс заканчивается ЗДЕСЬ
 
 
 class DisplayLockGuard {
@@ -93,4 +95,4 @@ private:
     virtual void Unlock() override {}
 };
 
-#endif
+#endif // DISPLAY_H
