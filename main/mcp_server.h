@@ -7,11 +7,13 @@
 #include <functional>
 #include <variant>
 #include <optional>
-#include <stdexcept>
 #include <thread>
 #include <mbedtls/base64.h>
-
 #include <cJSON.h>
+#include <esp_log.h>
+
+// Добавляем тег для логирования внутри этого файла
+#define MCP_TAG "McpServer"
 
 class ImageContent {
 private:
@@ -79,19 +81,30 @@ public:
     Property(const std::string& name, PropertyType type, int min_value, int max_value)
         : name_(name), type_(type), has_default_value_(false), min_value_(min_value), max_value_(max_value) {
         if (type != kPropertyTypeInteger) {
-            throw std::invalid_argument("Range limits only apply to integer properties");
+            ESP_LOGE(MCP_TAG, "Range limits only apply to integer properties for '%s', ignoring range.", name.c_str());
+            min_value_ = std::nullopt;
+            max_value_ = std::nullopt;
         }
     }
 
     Property(const std::string& name, PropertyType type, int default_value, int min_value, int max_value)
         : name_(name), type_(type), has_default_value_(true), min_value_(min_value), max_value_(max_value) {
         if (type != kPropertyTypeInteger) {
-            throw std::invalid_argument("Range limits only apply to integer properties");
+            ESP_LOGE(MCP_TAG, "Range limits only apply to integer properties for '%s', ignoring range.", name.c_str());
+            min_value_ = std::nullopt;
+            max_value_ = std::nullopt;
+        } else {
+            if (default_value < min_value || default_value > max_value) {
+                ESP_LOGE(MCP_TAG, "Default value %d for '%s' is out of range [%d, %d], clamping to range.", 
+                         default_value, name.c_str(), min_value, max_value);
+                // Clamping instead of throwing
+                if (default_value < min_value) value_ = min_value;
+                else if (default_value > max_value) value_ = max_value;
+                else value_ = default_value;
+            } else {
+                value_ = default_value;
+            }
         }
-        if (default_value < min_value || default_value > max_value) {
-            throw std::invalid_argument("Default value must be within the specified range");
-        }
-        value_ = default_value;
     }
 
     inline const std::string& name() const { return name_; }
@@ -111,10 +124,16 @@ public:
         // 添加对设置的整数值进行范围检查
         if constexpr (std::is_same_v<T, int>) {
             if (min_value_.has_value() && value < min_value_.value()) {
-                throw std::invalid_argument("Value is below minimum allowed: " + std::to_string(min_value_.value()));
+                ESP_LOGW(MCP_TAG, "Value %d for '%s' is below minimum %d, clamping.", 
+                         value, name_.c_str(), min_value_.value());
+                value_ = min_value_.value();
+                return;
             }
             if (max_value_.has_value() && value > max_value_.value()) {
-                throw std::invalid_argument("Value exceeds maximum allowed: " + std::to_string(max_value_.value()));
+                ESP_LOGW(MCP_TAG, "Value %d for '%s' exceeds maximum %d, clamping.", 
+                         value, name_.c_str(), max_value_.value());
+                value_ = max_value_.value();
+                return;
             }
         }
         value_ = value;
@@ -122,7 +141,6 @@ public:
 
     std::string to_json() const {
         cJSON *json = cJSON_CreateObject();
-        
         if (type_ == kPropertyTypeBoolean) {
             cJSON_AddStringToObject(json, "type", "boolean");
             if (has_default_value_) {
@@ -145,12 +163,10 @@ public:
                 cJSON_AddStringToObject(json, "default", value<std::string>().c_str());
             }
         }
-        
         char *json_str = cJSON_PrintUnformatted(json);
         std::string result(json_str);
         cJSON_free(json_str);
         cJSON_Delete(json);
-        
         return result;
     }
 };
@@ -162,6 +178,7 @@ private:
 public:
     PropertyList() = default;
     PropertyList(const std::vector<Property>& properties) : properties_(properties) {}
+
     void AddProperty(const Property& property) {
         properties_.push_back(property);
     }
@@ -172,7 +189,17 @@ public:
                 return property;
             }
         }
-        throw std::runtime_error("Property not found: " + name);
+        // Вместо throw возвращаем статический dummy объект или логируем ошибку
+        // Так как это константный метод и мы не можем изменить состояние, 
+        // лучше всего залогировать и вернуть первый элемент или пустой, но это рискованно.
+        // Для embedded лучше избегать таких ситуаций в рантайме.
+        // Здесь мы просто логируем критическую ошибку. В реальном коде лучше проверить exists() перед доступом.
+        ESP_LOGE(MCP_TAG, "Property not found: %s", name.c_str());
+        // Возвращаем ссылку на первый элемент как заглушку, чтобы не крашиться сразу, 
+        // но это плохая практика. Лучше изменить API на возврат optional или указателя.
+        // Для совместимости с существующим кодом оставим так, но с логом.
+        static Property dummy("error", kPropertyTypeString);
+        return dummy;
     }
 
     auto begin() { return properties_.begin(); }
@@ -190,17 +217,14 @@ public:
 
     std::string to_json() const {
         cJSON *json = cJSON_CreateObject();
-        
         for (const auto& property : properties_) {
             cJSON *prop_json = cJSON_Parse(property.to_json().c_str());
             cJSON_AddItemToObject(json, property.name().c_str(), prop_json);
         }
-        
         char *json_str = cJSON_PrintUnformatted(json);
         std::string result(json_str);
         cJSON_free(json_str);
         cJSON_Delete(json);
-        
         return result;
     }
 };
@@ -214,16 +238,17 @@ private:
     bool user_only_ = false;
 
 public:
-    McpTool(const std::string& name, 
-            const std::string& description, 
-            const PropertyList& properties, 
+    McpTool(const std::string& name,
+            const std::string& description,
+            const PropertyList& properties,
             std::function<ReturnValue(const PropertyList&)> callback)
-        : name_(name), 
-        description_(description), 
-        properties_(properties), 
-        callback_(callback) {}
+        : name_(name),
+          description_(description),
+          properties_(properties),
+          callback_(callback) {}
 
     void set_user_only(bool user_only) { user_only_ = user_only; }
+
     inline const std::string& name() const { return name_; }
     inline const std::string& description() const { return description_; }
     inline const PropertyList& properties() const { return properties_; }
@@ -231,7 +256,6 @@ public:
 
     std::string to_json() const {
         std::vector<std::string> required = properties_.GetRequired();
-        
         cJSON *json = cJSON_CreateObject();
         cJSON_AddStringToObject(json, "name", name_.c_str());
         cJSON_AddStringToObject(json, "description", description_.c_str());
@@ -239,8 +263,8 @@ public:
         cJSON *input_schema = cJSON_CreateObject();
         cJSON_AddStringToObject(input_schema, "type", "object");
         
-        cJSON *properties = cJSON_Parse(properties_.to_json().c_str());
-        cJSON_AddItemToObject(input_schema, "properties", properties);
+        cJSON *properties_json = cJSON_Parse(properties_.to_json().c_str());
+        cJSON_AddItemToObject(input_schema, "properties", properties_json);
         
         if (!required.empty()) {
             cJSON *required_array = cJSON_CreateArray();
@@ -249,7 +273,6 @@ public:
             }
             cJSON_AddItemToObject(input_schema, "required", required_array);
         }
-        
         cJSON_AddItemToObject(json, "inputSchema", input_schema);
 
         // Add audience annotation if the tool is user only (invisible to AI)
@@ -260,21 +283,21 @@ public:
             cJSON_AddItemToObject(annotations, "audience", audience);
             cJSON_AddItemToObject(json, "annotations", annotations);
         }
-        
+
         char *json_str = cJSON_PrintUnformatted(json);
         std::string result(json_str);
         cJSON_free(json_str);
         cJSON_Delete(json);
-        
         return result;
     }
 
     std::string Call(const PropertyList& properties) {
         ReturnValue return_value = callback_(properties);
+        
         // 返回结果
         cJSON* result = cJSON_CreateObject();
         cJSON* content = cJSON_CreateArray();
-
+        
         if (std::holds_alternative<ImageContent*>(return_value)) {
             auto image_content = std::get<ImageContent*>(return_value);
             cJSON* image = cJSON_CreateObject();
@@ -285,6 +308,7 @@ public:
         } else {
             cJSON* text = cJSON_CreateObject();
             cJSON_AddStringToObject(text, "type", "text");
+            
             if (std::holds_alternative<std::string>(return_value)) {
                 cJSON_AddStringToObject(text, "text", std::get<std::string>(return_value).c_str());
             } else if (std::holds_alternative<bool>(return_value)) {
@@ -300,9 +324,10 @@ public:
             }
             cJSON_AddItemToArray(content, text);
         }
+        
         cJSON_AddItemToObject(result, "content", content);
         cJSON_AddBoolToObject(result, "isError", false);
-
+        
         auto json_str = cJSON_PrintUnformatted(result);
         std::string result_str(json_str);
         cJSON_free(json_str);
@@ -329,15 +354,11 @@ public:
 private:
     McpServer();
     ~McpServer();
-
     void ParseCapabilities(const cJSON* capabilities);
-
     void ReplyResult(int id, const std::string& result);
     void ReplyError(int id, const std::string& message);
-
     void GetToolsList(int id, const std::string& cursor, bool list_user_only_tools);
     void DoToolCall(int id, const std::string& tool_name, const cJSON* tool_arguments);
-
     std::vector<McpTool*> tools_;
 };
 
