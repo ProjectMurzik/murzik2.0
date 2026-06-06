@@ -1,4 +1,19 @@
-CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+# === C++ / RTTI / Exceptions (КРИТИЧНО для MiniClaw) ===
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# === LVGL (уже есть, но проверь) ===
 CONFIG_LV_CONF_INCLUDE_SIMPLE=y
 CONFIG_LV_LVGL_H_INCLUDE_SIMPLE=y
+
+# === Filesystem ===
 CONFIG_FATFS_CODEPAGE_UTF8=y
+
+# === Logging (базовый уровень) ===
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# === MCP Server ===
+CONFIG_MCP_ENABLED=y
+
+# === Audio Processor ===
+CONFIG_USE_AUDIO_PROCESSOR=y
