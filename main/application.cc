@@ -553,6 +553,8 @@ void Application::InitializeProtocol() {
                         ESP_LOGI(TAG, "<< %s", text->valuestring);
                     }
                 }
+            }
+            
             // Handle audio data from backend TTS
             auto audio = cJSON_GetObjectItem(root, "audio");
             if (cJSON_IsString(audio) && audio->valuestring) {
@@ -566,11 +568,10 @@ void Application::InitializeProtocol() {
                 if (ret == 0 && decoded_len > 0) {
                     decoded.resize(decoded_len);
                     
-                    // 🔥 ЗАМЕНА PlayOpusData на PushPacketToDecodeQueue
+                    // ✅ ИСПРАВЛЕНО: Корректная замена PlayOpusData
                     auto packet = std::make_unique<AudioStreamPacket>();
                     packet->payload.assign(decoded.begin(), decoded.end());
-                    packet->timestamp = esp_timer_get_time() / 1000; // Timestamp в мс
-                    
+                    packet->timestamp = esp_timer_get_time() / 1000;
                     audio_service_.PushPacketToDecodeQueue(std::move(packet));
                     
                     ESP_LOGD(TAG, "Playing TTS audio: %zu bytes", decoded_len);
@@ -578,6 +579,7 @@ void Application::InitializeProtocol() {
                     ESP_LOGE(TAG, "Failed to decode base64 audio, ret=%d", ret);
                 }
             }
+            
         } else if (strcmp(type->valuestring, "stt") == 0) {
             auto text = cJSON_GetObjectItem(root, "text");
             if (cJSON_IsString(text)) {
@@ -585,8 +587,7 @@ void Application::InitializeProtocol() {
                 Schedule([display, message = std::string(text->valuestring)]() {
                     display->SetChatMessage("user", message.c_str());
                     bridge_send_to_agent(message.c_str());
-                    // Show "thinking" message immediately after sending to Agent
-                    display->SetChatMessage("assistant", "思考中...");
+                    display->SetChatMessage("assistant", "Думаю...");
                 });
             }
         } else if (strcmp(type->valuestring, "mcp") == 0) {
@@ -599,10 +600,7 @@ void Application::InitializeProtocol() {
             if (cJSON_IsString(command)) {
                 ESP_LOGI(TAG, "System command: %s", command->valuestring);
                 if (strcmp(command->valuestring, "reboot") == 0) {
-                    // Do a reboot if user requests a OTA update
-                    Schedule([this]() {
-                        Reboot();
-                    });
+                    Schedule([this]() { Reboot(); });
                 } else {
                     ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
                 }
@@ -629,7 +627,9 @@ void Application::InitializeProtocol() {
             }
 #endif
         } else if (strcmp(type->valuestring, "llm") == 0) {
+            // LLM messages handled elsewhere
         } else if (strcmp(type->valuestring, "tts") == 0) {
+            // TTS control messages handled elsewhere
         } else {
             ESP_LOGW(TAG, "Unknown message type: %s", type->valuestring);
         }
