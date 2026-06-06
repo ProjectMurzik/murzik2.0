@@ -739,7 +739,7 @@ void Application::HandleToggleChatEvent() {
     } else if (state == kDeviceStateSpeaking) {
         AbortSpeaking(kAbortReasonNone);
         // Clear playback queues to stop TTS immediately
-        audio_service_.ClearPlaybackQueues();
+        audio_service_.ResetDecoder();
     } else if (state == kDeviceStateListening) {
         protocol_->CloseAudioChannel();
     }
@@ -837,7 +837,7 @@ void Application::HandleWakeWordDetectedEvent() {
         // Clear send queue to avoid sending residues to server
         while (audio_service_.PopPacketFromSendQueue());
         // Clear playback queues to stop TTS immediately
-        audio_service_.ClearPlaybackQueues();
+        audio_service_.ResetDecoder();
 
         if (state == kDeviceStateListening) {
             protocol_->SendStartListening(GetDefaultListeningMode());
@@ -1083,7 +1083,7 @@ void Application::WakeWordInvoke(const std::string& wake_word) {
             // Clear send queue to avoid sending residues to server
             while (audio_service_.PopPacketFromSendQueue());
             // Clear playback queues to stop TTS immediately
-            audio_service_.ClearPlaybackQueues();
+            audio_service_.ResetDecoder();
             // Stop speaking and start listening again
             play_popup_on_listening_ = true;
             SetListeningMode(GetDefaultListeningMode());
