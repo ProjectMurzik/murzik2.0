@@ -2,10 +2,8 @@
 #define OLED_DISPLAY_H
 
 #include "lvgl_display.h"
-
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
-
 
 class OledDisplay : public LvglDisplay {
 private:
@@ -31,6 +29,9 @@ private:
 public:
     OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width, int height, bool mirror_x, bool mirror_y);
     ~OledDisplay();
+
+    // 🔥 НОВЫЙ МЕТОД: Идентификация типа дисплея без RTTI
+    Type GetDisplayType() const override { return TYPE_OLED; }
 
     virtual void SetupUI() override;
     virtual void SetChatMessage(const char* role, const char* content) override;
