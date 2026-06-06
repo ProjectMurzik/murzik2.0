@@ -19,7 +19,6 @@ class Theme {
 public:
     Theme(const std::string& name) : name_(name) {}
     virtual ~Theme() = default;
-
     inline std::string name() const { return name_; }
 private:
     std::string name_;
@@ -27,23 +26,20 @@ private:
 
 class Display {
 public:
-    // 🔥 ДОБАВЛЕН TYPE_OLED
+    // 🔥 Идентификация типа дисплея без RTTI
     enum Type {
         TYPE_UNKNOWN = 0,
         TYPE_LCD,
         TYPE_EMOTE,
         TYPE_NO_DISPLAY,
-        TYPE_OLED  // <-- Добавлено
+        TYPE_OLED  // <-- Добавлено для OLED
     };
 
     Display();
     virtual ~Display();
 
-    // Виртуальный метод для проверки типа
+    // Виртуальный метод для проверки типа (замена dynamic_cast)
     virtual Type GetDisplayType() const { return TYPE_UNKNOWN; }
-
-    // ... остальные методы без изменений ...
-};
 
     virtual void SetStatus(const char* status);
     virtual void ShowNotification(const char* notification, int duration_ms = 3000);
@@ -66,8 +62,7 @@ public:
 protected:
     int width_ = 0;
     int height_ = 0;
-    bool setup_ui_called_ = false;  // Track if SetupUI() has been called
-
+    bool setup_ui_called_ = false;
     Theme* current_theme_ = nullptr;
 
     friend class DisplayLockGuard;
@@ -86,20 +81,15 @@ public:
     ~DisplayLockGuard() {
         display_->Unlock();
     }
-
 private:
     Display *display_;
 };
 
 class NoDisplay : public Display {
 public:
-    // Переопределяем тип для NoDisplay
     Type GetDisplayType() const override { return TYPE_NO_DISPLAY; }
-
 private:
-    virtual bool Lock(int timeout_ms = 0) override {
-        return true;
-    }
+    virtual bool Lock(int timeout_ms = 0) override { return true; }
     virtual void Unlock() override {}
 };
 
