@@ -14,7 +14,7 @@ Reference: https://modelcontextprotocol.io/specification/2024-11-05
 #include "board.h"
 #include "settings.h"
 #include "lvgl_theme.h"
-#include "lcd_display.h" // Добавлен заголовок для LcdDisplay
+#include "lcd_display.h"
 
 #define TAG "MCP"
 
@@ -29,9 +29,8 @@ McpServer::~McpServer() {
 }
 
 void McpServer::AddCommonTools() {
-    // Backup the original tools list and restore it after adding the common tools.
     auto original_tools = std::move(tools_);
-    auto & board = Board::GetInstance();
+    auto& board = Board::GetInstance();
 
     AddTool("self.get_device_status",
          "Provides the real-time information of the device, including the current status of the audio speaker, screen, battery, network, etc.\n"
@@ -39,16 +38,16 @@ void McpServer::AddCommonTools() {
          "1. Answering questions about current condition (e.g. what is the current volume of the audio speaker?)\n"
          "2. As the first step to control the device (e.g. turn up / down the volume of the audio speaker, etc.)",
         PropertyList(),
-        [&board](const PropertyList & properties) -> ReturnValue {
+        [&board](const PropertyList& properties) -> ReturnValue {
             return board.GetDeviceStatusJson();
         });
 
-    AddTool("self.audio_speaker.set_volume", 
+    AddTool("self.audio_speaker.set_volume",
          "Set the volume of the audio speaker. If the current volume is unknown, you must call `self.get_device_status` tool first and then call this tool.",
         PropertyList({
             Property("volume", kPropertyTypeInteger, 0, 100)
-        }), 
-        [&board](const PropertyList & properties) -> ReturnValue {
+        }),
+        [&board](const PropertyList& properties) -> ReturnValue {
             auto codec = board.GetAudioCodec();
             codec->SetOutputVolume(properties["volume"].value<int>());
             return true;
@@ -61,7 +60,7 @@ void McpServer::AddCommonTools() {
             PropertyList({
                 Property("brightness", kPropertyTypeInteger, 0, 100)
             }),
-            [backlight](const PropertyList & properties) -> ReturnValue {
+            [backlight](const PropertyList& properties) -> ReturnValue {
                 uint8_t brightness = static_cast<uint8_t>(properties["brightness"].value<int>());
                 backlight->SetBrightness(brightness, true);
                 return true;
@@ -76,9 +75,9 @@ void McpServer::AddCommonTools() {
             PropertyList({
                 Property("theme", kPropertyTypeString)
             }),
-            [display](const PropertyList & properties) -> ReturnValue {
+            [display](const PropertyList& properties) -> ReturnValue {
                 auto theme_name = properties["theme"].value<std::string>();
-                auto & theme_manager = LvglThemeManager::GetInstance();
+                auto& theme_manager = LvglThemeManager::GetInstance();
                 auto theme = theme_manager.GetTheme(theme_name);
                 if (theme != nullptr) {
                     display->SetTheme(theme);
@@ -99,12 +98,11 @@ void McpServer::AddCommonTools() {
             PropertyList({
                 Property("question", kPropertyTypeString)
             }),
-            [camera](const PropertyList & properties) -> ReturnValue {
+            [camera](const PropertyList& properties) -> ReturnValue {
                 TaskPriorityReset priority_reset(1);
 
                 if (!camera->Capture()) {
                     ESP_LOGE(TAG, "Failed to capture photo");
-                    // 🔥 ВОЗВРАТ ОШИБКИ ВМЕСТО THROW
                     cJSON* err_json = cJSON_CreateObject();
                     cJSON_AddStringToObject(err_json, "error", "Failed to capture photo");
                     return err_json;
@@ -115,7 +113,6 @@ void McpServer::AddCommonTools() {
     }
 #endif
 
-    // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
 }
 
@@ -130,8 +127,8 @@ void McpServer::AddUserOnlyTools() {
 
     AddUserOnlyTool("self.reboot", "Reboot the system",
         PropertyList(),
-        [this](const PropertyList & properties) -> ReturnValue {
-            auto & app = Application::GetInstance();
+        [this](const PropertyList& properties) -> ReturnValue {
+            auto& app = Application::GetInstance();
             app.Schedule([&app]() {
                 ESP_LOGW(TAG, "User requested reboot");
                 vTaskDelay(pdMS_TO_TICKS(1000));
@@ -144,23 +141,23 @@ void McpServer::AddUserOnlyTools() {
         PropertyList({
             Property("url", kPropertyTypeString, "The URL of the firmware binary file to download and install")
         }),
-        [this](const PropertyList & properties) -> ReturnValue {
+        [this](const PropertyList& properties) -> ReturnValue {
             auto url = properties["url"].value<std::string>();
             ESP_LOGI(TAG, "User requested firmware upgrade from URL: %s", url.c_str());
-            
-            auto & app = Application::GetInstance();
+
+            auto& app = Application::GetInstance();
             app.Schedule([url, &app]() {
                 bool success = app.UpgradeFirmware(url);
                 if (!success) {
                     ESP_LOGE(TAG, "Firmware upgrade failed");
                 }
             });
-            
+
             return true;
         });
 
 #ifdef HAVE_LVGL
-    // 🔥 ЗАМЕНА dynamic_cast<LvglDisplay*> НА GetDisplayType()
+    // 🔥 ЗАМЕНА dynamic_cast НА GetDisplayType()
     auto* display_ptr = Board::GetInstance().GetDisplay();
     auto* lcd_display = (display_ptr && display_ptr->GetDisplayType() == Display::TYPE_LCD)
                         ? static_cast<LcdDisplay*>(display_ptr)
@@ -169,15 +166,15 @@ void McpServer::AddUserOnlyTools() {
     if (lcd_display) {
         AddUserOnlyTool("self.screen.get_info", "Information about the screen, including width, height, etc.",
             PropertyList(),
-            [lcd_display, display_ptr](const PropertyList & properties) -> ReturnValue {
+            [lcd_display, display_ptr](const PropertyList& properties) -> ReturnValue {
                 cJSON* json = cJSON_CreateObject();
                 cJSON_AddNumberToObject(json, "width", lcd_display->width());
                 cJSON_AddNumberToObject(json, "height", lcd_display->height());
-                
+
                 // 🔥 ЗАМЕНА dynamic_cast<OledDisplay*> НА GetDisplayType()
                 bool is_oled = (display_ptr && display_ptr->GetDisplayType() == Display::TYPE_OLED);
                 cJSON_AddBoolToObject(json, "monochrome", is_oled);
-                
+
                 return json;
             });
 
@@ -187,28 +184,28 @@ void McpServer::AddUserOnlyTools() {
                 Property("url", kPropertyTypeString),
                 Property("quality", kPropertyTypeInteger, 80, 1, 100)
             }),
-            [lcd_display](const PropertyList & properties) -> ReturnValue {
+            [lcd_display](const PropertyList& properties) -> ReturnValue {
                 auto url = properties["url"].value<std::string>();
                 auto quality = properties["quality"].value<int>();
                 std::string jpeg_data;
-                
+
                 if (!lcd_display->SnapshotToJpeg(jpeg_data, quality)) {
                     ESP_LOGE(TAG, "Failed to snapshot screen");
                     return std::string("Error: Failed to snapshot screen");
                 }
 
                 ESP_LOGI(TAG, "Upload snapshot %u bytes to %s", jpeg_data.size(), url.c_str());
-                
+
                 std::string boundary = "----ESP32_SCREEN_SNAPSHOT_BOUNDARY";
-                
+
                 auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
                 http->SetHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
-                
+
                 if (!http->Open("POST", url)) {
                     ESP_LOGE(TAG, "Failed to open URL: %s", url.c_str());
                     return std::string("Error: Failed to open URL");
                 }
-                
+
                 {
                     std::string file_header;
                     file_header += "--" + boundary + "\r\n";
@@ -221,8 +218,9 @@ void McpServer::AddUserOnlyTools() {
                 http->Write((const char*)jpeg_data.data(), jpeg_data.size());
 
                 {
+                    // 🔥 ИСПРАВЛЕНА ОПЕЧАТКА: multipart_foote r -> multipart_footer
                     std::string multipart_footer;
-                    multipart_footer += "\r\n--" + boundary + "--\r\n"; // 🔥 ИСПРАВЛЕНА ОПЕЧАТКА multipart_foote r
+                    multipart_footer += "\r\n--" + boundary + "--\r\n";
                     http->Write(multipart_footer.c_str(), multipart_footer.size());
                 }
                 http->Write("", 0);
@@ -231,18 +229,18 @@ void McpServer::AddUserOnlyTools() {
                     ESP_LOGE(TAG, "Unexpected status code: %d", http->GetStatusCode());
                     return std::string("Error: Unexpected status code");
                 }
-                
+
                 std::string result = http->ReadAll();
                 http->Close();
                 ESP_LOGI(TAG, "Snapshot screen result: %s", result.c_str());
                 return true;
             });
-    
+
         AddUserOnlyTool("self.screen.preview_image", "Preview an image on the screen",
             PropertyList({
                 Property("url", kPropertyTypeString)
             }),
-            [lcd_display](const PropertyList & properties) -> ReturnValue {
+            [lcd_display](const PropertyList& properties) -> ReturnValue {
                 auto url = properties["url"].value<std::string>();
                 auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
 
@@ -250,7 +248,7 @@ void McpServer::AddUserOnlyTools() {
                     ESP_LOGE(TAG, "Failed to open URL: %s", url.c_str());
                     return std::string("Error: Failed to open URL");
                 }
-                
+
                 int status_code = http->GetStatusCode();
                 if (status_code != 200) {
                     ESP_LOGE(TAG, "Unexpected status code: %d", status_code);
@@ -263,7 +261,7 @@ void McpServer::AddUserOnlyTools() {
                     ESP_LOGE(TAG, "Failed to allocate memory for image");
                     return std::string("Error: Memory allocation failed");
                 }
-                
+
                 size_t total_read = 0;
                 while (total_read < content_length) {
                     int ret = http->Read(data + total_read, content_length - total_read);
@@ -285,13 +283,13 @@ void McpServer::AddUserOnlyTools() {
     }
 #endif // HAVE_LVGL
 
-    auto & assets = Assets::GetInstance();
+    auto& assets = Assets::GetInstance();
     if (assets.partition_valid()) {
         AddUserOnlyTool("self.assets.set_download_url", "Set the download url for the assets",
             PropertyList({
                 Property("url", kPropertyTypeString)
             }),
-            [](const PropertyList & properties) -> ReturnValue {
+            [](const PropertyList& properties) -> ReturnValue {
                 auto url = properties["url"].value<std::string>();
                 Settings settings("assets", true);
                 settings.SetString("download_url", url);
@@ -430,7 +428,7 @@ void McpServer::ParseMessage(const cJSON* json) {
     }
 }
 
-void McpServer::ReplyResult(int id, const std::string & result) {
+void McpServer::ReplyResult(int id, const std::string& result) {
     std::string payload = "{\"jsonrpc\":\"2.0\",\"id\":";
     payload += std::to_string(id) + ",\"result\":";
     payload += result;
@@ -438,7 +436,7 @@ void McpServer::ReplyResult(int id, const std::string & result) {
     Application::GetInstance().SendMcpMessage(payload);
 }
 
-void McpServer::ReplyError(int id, const std::string & message) {
+void McpServer::ReplyError(int id, const std::string& message) {
     std::string payload = "{\"jsonrpc\":\"2.0\",\"id\":";
     payload += std::to_string(id);
     payload += ",\"error\":{\"message\":\"";
@@ -468,13 +466,13 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
             ++it;
             continue;
         }
-        
+
         std::string tool_json = (*it)->to_json() + ",";
         if (json.length() + tool_json.length() + 30 > max_payload_size) {
             next_cursor = (*it)->name();
             break;
         }
-        
+
         json += tool_json;
         ++it;
     }
@@ -503,7 +501,7 @@ void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* to
         [&tool_name](const McpTool* tool) {
             return tool->name() == tool_name;
         });
-    
+
     if (tool_iter == tools_.end()) {
         ESP_LOGE(TAG, "tools/call: Unknown tool: %s", tool_name.c_str());
         ReplyError(id, "Unknown tool: " + tool_name);
@@ -511,9 +509,9 @@ void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* to
     }
 
     PropertyList arguments = (*tool_iter)->properties();
-    
-    // 🔥 УБРАН try-catch, так как Property::set_value больше не выбрасывает исключения
-    for (auto & argument : arguments) {
+
+    // 🔥 УБРАН try-catch: Property::set_value больше не выбрасывает исключения
+    for (auto& argument : arguments) {
         bool found = false;
         if (cJSON_IsObject(tool_arguments)) {
             auto value = cJSON_GetObjectItem(tool_arguments, argument.name().c_str());
@@ -536,9 +534,9 @@ void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* to
         }
     }
 
-    auto & app = Application::GetInstance();
+    auto& app = Application::GetInstance();
     app.Schedule([this, id, tool_iter, arguments = std::move(arguments)]() {
-        // 🔥 УБРАН try-catch, так как Call() больше не выбрасывает исключения
+        // 🔥 УБРАН try-catch: Call() больше не выбрасывает исключения
         ReplyResult(id, (*tool_iter)->Call(arguments));
     });
 }
