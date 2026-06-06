@@ -29,8 +29,7 @@ CONFIG_AUDIO_BOARD_CUSTOM=y
 # Wake Word Models (XiaoClaw/Mimiclaw)
 # ⚠️ ВНИМАНИЕ: Проверьте актуальные имена моделей для P4 через idf.py menuconfig
 # Component config → ESP Speech Recognition → Wake Word Engine
-CONFIG_SR_WN_WN9S_NIHAOXIAOZHI=y
-CONFIG_SR_WN_WN9L_NIHAOXIAOZHI_TTS3=y
+CONFIG_SR_WN_WN10_NIHAO_XIAO_ZHI=y
 
 # === 4. Display & LVGL ===
 CONFIG_LCD_MIPI_DSI_LANE_BITRATE_MBPS=1500
