@@ -24,8 +24,8 @@ void PressToTalkMcpTool::Initialize() {
             return HandleSetPressToTalk(properties);
         });
 
-    ESP_LOGI(TAG, "PressToTalkMcpTool initialized, current mode: %s", 
-        press_to_talk_enabled_ ? "press_to_talk" : "click_to_talk");
+    ESP_LOGI(TAG, "PressToTalkMcpTool initialized, current mode: %s",
+             press_to_talk_enabled_ ? "press_to_talk" : "click_to_talk");
 }
 
 bool PressToTalkMcpTool::IsPressToTalkEnabled() const {
@@ -34,7 +34,6 @@ bool PressToTalkMcpTool::IsPressToTalkEnabled() const {
 
 ReturnValue PressToTalkMcpTool::HandleSetPressToTalk(const PropertyList& properties) {
     auto mode = properties["mode"].value<std::string>();
-    
     if (mode == "press_to_talk") {
         SetPressToTalkEnabled(true);
         ESP_LOGI(TAG, "Switched to press to talk mode");
@@ -44,14 +43,15 @@ ReturnValue PressToTalkMcpTool::HandleSetPressToTalk(const PropertyList& propert
         ESP_LOGI(TAG, "Switched to click to talk mode");
         return true;
     }
-    
-    throw std::runtime_error("Invalid mode: " + mode);
+
+    // 🔥 ИСПРАВЛЕНО: Заменено throw на безопасный возврат ошибки
+    ESP_LOGE(TAG, "Invalid mode: %s", mode.c_str());
+    return std::string("Error: Invalid mode. Use 'press_to_talk' or 'click_to_talk'.");
 }
 
 void PressToTalkMcpTool::SetPressToTalkEnabled(bool enabled) {
     press_to_talk_enabled_ = enabled;
-    
     Settings settings("vendor", true);
     settings.SetInt("press_to_talk", enabled ? 1 : 0);
     ESP_LOGI(TAG, "Press to talk enabled: %d", enabled);
-} 
+}
