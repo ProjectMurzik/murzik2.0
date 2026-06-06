@@ -23,6 +23,7 @@ jobs:
           esp_idf_version: v5.5.2
           target: esp32p4
           command: |
+            idf.py fullclean
             idf.py set-target esp32p4
             idf.py build
 
