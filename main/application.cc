@@ -553,7 +553,6 @@ void Application::InitializeProtocol() {
                         ESP_LOGI(TAG, "<< %s", text->valuestring);
                     }
                 }
-            }
             // Handle audio data from backend TTS
             auto audio = cJSON_GetObjectItem(root, "audio");
             if (cJSON_IsString(audio) && audio->valuestring) {
@@ -563,9 +562,17 @@ void Application::InitializeProtocol() {
 
                 int ret = mbedtls_base64_decode(decoded.data(), decoded_len, &decoded_len,
                     (const unsigned char*)audio->valuestring, audio_len);
+                
                 if (ret == 0 && decoded_len > 0) {
                     decoded.resize(decoded_len);
-                    audio_service_.PlayOpusData(decoded);
+                    
+                    // 🔥 ЗАМЕНА PlayOpusData на PushPacketToDecodeQueue
+                    auto packet = std::make_unique<AudioStreamPacket>();
+                    packet->payload.assign(decoded.begin(), decoded.end());
+                    packet->timestamp = esp_timer_get_time() / 1000; // Timestamp в мс
+                    
+                    audio_service_.PushPacketToDecodeQueue(std::move(packet));
+                    
                     ESP_LOGD(TAG, "Playing TTS audio: %zu bytes", decoded_len);
                 } else {
                     ESP_LOGE(TAG, "Failed to decode base64 audio, ret=%d", ret);
