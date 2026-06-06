@@ -44,3 +44,15 @@ CONFIG_PARTITION_TABLE_OFFSET=0x11000
 # === 8. Flash Size (КРИТИЧНО!) ===
 # Решает ошибку: "Partitions tables occupies 34.1MB ... does not fit in configured flash size 2MB"
 CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+
+# === 9. Debug Logging для верификации компонентов ===
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
+CONFIG_LOG_DYNAMIC=y
+
+# Камера / Видео
+CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE=y
+CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=y
+
+# MCP / MiniClaw agent
+CONFIG_MCP_ENABLED=y
