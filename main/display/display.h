@@ -27,19 +27,23 @@ private:
 
 class Display {
 public:
-    // 🔥 НОВЫЙ КОД: Идентификация типа дисплея без RTTI
+    // 🔥 ДОБАВЛЕН TYPE_OLED
     enum Type {
         TYPE_UNKNOWN = 0,
         TYPE_LCD,
         TYPE_EMOTE,
-        TYPE_NO_DISPLAY
+        TYPE_NO_DISPLAY,
+        TYPE_OLED  // <-- Добавлено
     };
 
     Display();
     virtual ~Display();
 
-    // Виртуальный метод для проверки типа (замена dynamic_cast)
+    // Виртуальный метод для проверки типа
     virtual Type GetDisplayType() const { return TYPE_UNKNOWN; }
+
+    // ... остальные методы без изменений ...
+};
 
     virtual void SetStatus(const char* status);
     virtual void ShowNotification(const char* notification, int duration_ms = 3000);
