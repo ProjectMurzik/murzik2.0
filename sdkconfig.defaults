@@ -1,0 +1,28 @@
+# ---------------------------------------------------------
+# Базовые настройки проекта Murzik (sdkconfig.defaults)
+# Применяются ко всем таргетам (S3, P4 и др.)
+# ---------------------------------------------------------
+
+# === 1. System & Logging ===
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_COLORS=y
+CONFIG_LOG_TIMESTAMP_SOURCE_RTOS=y
+
+# === 2. LVGL Base Configuration ===
+# Критически важные флаги для корректной работы UI
+CONFIG_LV_CONF_INCLUDE_SIMPLE=y
+CONFIG_LV_LVGL_H_INCLUDE_SIMPLE=y
+CONFIG_LV_MEM_CUSTOM=y
+CONFIG_LV_MEM_SIZE=512*1024  # 512KB RAM под объекты LVGL
+
+# === 3. Filesystem & Storage ===
+CONFIG_FATFS_CODEPAGE_UTF8=y
+CONFIG_VFS_SUPPORT_DIR=y
+
+# === 4. Network Stack ===
+CONFIG_LWIP_MAX_SOCKETS=16
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+
+# === 5. Component Manager ===
+# Разрешаем загрузку компонентов из registry Espressif
+CONFIG_ESP_COMPONENTS_REGISTRY_URL="https://components.espressif.com"
