@@ -1,0 +1,39 @@
+name: Build Murzik Firmware (ESP32-P4)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Позволяет запускать вручную
+
+jobs:
+  build-esp32p4:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup ESP-IDF Environment
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.2
+          target: esp32p4
+          command: |
+            idf.py set-target esp32p4
+            idf.py build
+
+      - name: Upload Firmware Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: murzik-firmware-esp32p4
+          path: |
+            build/*.bin
+            build/partition_table/*.bin
+            build/bootloader/*.bin
+            build/sdkconfig
+          retention-days: 7
