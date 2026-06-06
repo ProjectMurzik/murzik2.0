@@ -32,7 +32,7 @@ public:
         TYPE_LCD,
         TYPE_EMOTE,
         TYPE_NO_DISPLAY,
-        TYPE_OLED
+        TYPE_OLED  // <-- Добавлено для OLED
     };
 
     Display();
@@ -41,8 +41,7 @@ public:
     // Виртуальный метод для проверки типа (замена dynamic_cast)
     virtual Type GetDisplayType() const { return TYPE_UNKNOWN; }
 
-    // ⚠️ ВАЖНО: Здесь НЕ должно быть закрывающей скобки };
-    // Все методы должны находиться ВНУТРИ класса
+    // ⚠️ ВАЖНО: Все методы ниже находятся ВНУТРИ класса Display
     virtual void SetStatus(const char* status);
     virtual void ShowNotification(const char* notification, int duration_ms = 3000);
     virtual void ShowNotification(const std::string &notification, int duration_ms = 3000);
