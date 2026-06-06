@@ -729,8 +729,13 @@ bool EspVideo::Capture() {
         }
     }
 
+    
     // 显示预览图片
-    auto display = dynamic_cast<LvglDisplay*>(Board::GetInstance().GetDisplay());
+    auto* display_ptr = Board::GetInstance().GetDisplay();
+    auto* display = (display_ptr && display_ptr->GetDisplayType() == Display::TYPE_LCD) 
+                    ? static_cast<LvglDisplay*>(display_ptr) 
+                    : nullptr;
+    
     if (display != nullptr) {
         if (!frame_.data) {
             ESP_LOGE(TAG, "frame.data is null");
@@ -899,7 +904,8 @@ bool EspVideo::SetVFlip(bool enabled) {
  */
 std::string EspVideo::Explain(const std::string& question) {
     if (explain_url_.empty()) {
-        throw std::runtime_error("Image explain URL or token is not set");
+       ESP_LOGE(TAG, "Image explain URL or token is not set");
+return std::string("Error: Image explain URL or token is not set");
     }
 
     // 创建局部的 JPEG 队列, 40 entries is about to store 512 * 40 = 20480 bytes of JPEG data
