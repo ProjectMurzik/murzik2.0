@@ -5,36 +5,95 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Позволяет запускать вручную
+  workflow_dispatch:
 
 jobs:
-  build-esp32p4:
+  build:
     runs-on: ubuntu-latest
-    
+    container: espressif/idf:v5.5.2
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Setup ESP-IDF Environment
-        uses: espressif/esp-idf-ci-action@v1
-        with:
-          esp_idf_version: v5.5.2
-          target: esp32p4
-          command: |
-            idf.py fullclean
-            idf.py set-target esp32p4
-            idf.py build
+      - name: Setup ESP-IDF environment
+        run: |
+          . /opt/esp/idf/export.sh
+          echo "IDF_PATH=/opt/esp/idf" >> $GITHUB_ENV
+          echo "/opt/esp/idf/tools" >> $GITHUB_PATH
 
-      - name: Upload Firmware Artifacts
-        if: success()
+      - name: Configure and Build
+        run: |
+          . /opt/esp/idf/export.sh
+          idf.py set-target esp32p4
+          idf.py build
+
+      - name: Verify firmware components and sizes
+        run: |
+          . /opt/esp/idf/export.sh
+          
+          echo "========================================="
+          echo "=== PARTITION TABLE VERIFICATION      ==="
+          echo "========================================="
+          idf.py partition-table
+          
+          echo ""
+          echo "========================================="
+          echo "=== FIRMWARE BINARY SIZE              ==="
+          echo "========================================="
+          ls -lh build/Murzik.bin
+          
+          echo ""
+          echo "========================================="
+          echo "=== ELF SECTIONS SIZE                 ==="
+          echo "========================================="
+          riscv32-esp-elf-size -A build/Murzik.elf | head -25
+          
+          echo ""
+          echo "========================================="
+          echo "=== CRITICAL FILES CHECK              ==="
+          echo "========================================="
+          test -f build/Murzik.bin && echo "✅ Murzik.bin exists" || echo "❌ Murzik.bin MISSING"
+          test -f build/srmodels/srmodels.bin && echo "✅ srmodels.bin exists" || echo "❌ srmodels.bin MISSING"
+          test -f build/partition_table/partition-table.bin && echo "✅ partition-table.bin exists" || echo "❌ partition-table.bin MISSING"
+          test -f build/bootloader/bootloader.bin && echo "✅ bootloader.bin exists" || echo "❌ bootloader.bin MISSING"
+          test -f build/ota_data_initial.bin && echo "✅ ota_data_initial.bin exists" || echo "❌ ota_data_initial.bin MISSING"
+          
+          echo ""
+          echo "========================================="
+          echo "=== SDK CONFIG VERIFICATION           ==="
+          echo "========================================="
+          echo "--- Display & LVGL ---"
+          grep -E "CONFIG_HAVE_LVGL|CONFIG_LV_USE_IMGFONT|CONFIG_LCD_MIPI_DSI" build/config/sdkconfig.h || echo "⚠️ Display configs not found"
+          
+          echo "--- Camera & Video ---"
+          grep -E "CONFIG_CAMERA_OV5647|CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI|CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE" build/config/sdkconfig.h || echo "⚠️ Camera configs not found"
+          
+          echo "--- Audio & ESP-SR ---"
+          grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_ESP_SR_AFE_SUPPORTED" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
+          
+          echo "--- MCP / MiniClaw Agent ---"
+          grep -E "CONFIG_MCP_ENABLED" build/config/sdkconfig.h || echo "⚠️ MCP config not found"
+          
+          echo "--- Board & Flash ---"
+          grep -E "CONFIG_BOARD_TYPE_WAVESHARE|CONFIG_ESPTOOLPY_FLASHSIZE_32MB|CONFIG_IDF_TARGET_ESP32P4" build/config/sdkconfig.h || echo "⚠️ Board/Flash configs not found"
+          
+          echo ""
+          echo "========================================="
+          echo "=== LOG LEVEL VERIFICATION            ==="
+          echo "========================================="
+          grep -E "CONFIG_LOG_DEFAULT_LEVEL|CONFIG_LOG_MAXIMUM_LEVEL|CONFIG_LOG_DYNAMIC" build/config/sdkconfig.h || echo "⚠️ Log level configs not found"
+
+      - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: murzik-firmware-esp32p4
           path: |
-            build/*.bin
-            build/partition_table/*.bin
-            build/bootloader/*.bin
-            build/sdkconfig
-          retention-days: 7
+            build/Murzik.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/ota_data_initial.bin
+            build/srmodels/srmodels.bin
+          retention-days: 30
