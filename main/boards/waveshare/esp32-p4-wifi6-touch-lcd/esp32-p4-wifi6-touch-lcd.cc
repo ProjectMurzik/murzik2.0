@@ -15,11 +15,8 @@
 
 #if CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_4B
 #include "esp_lcd_st7703.h"
-<<<<<<< HEAD
-=======
 #elif CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_4_3
 #include "esp_lcd_st7701.h"
->>>>>>> upstream/main
 #elif CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_7B
 #include "esp_lcd_ek79007.h"
 #elif CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_3_4C || CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_4C \
@@ -141,8 +138,6 @@ private:
             .vendor_config = &vendor_config,
         };
         esp_lcd_new_panel_st7703(io, &lcd_dev_config, &disp_panel);
-<<<<<<< HEAD
-=======
 #elif CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_4_3
     esp_lcd_dpi_panel_config_t dpi_config = {                                                 
         .dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT,  
@@ -183,7 +178,6 @@ private:
             .vendor_config = &vendor_config,
     };
     esp_lcd_new_panel_st7701(io, &lcd_dev_config, &disp_panel);
->>>>>>> upstream/main
 #elif CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_7B
     esp_lcd_dpi_panel_config_t dpi_config = {
             .dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT,
@@ -342,7 +336,7 @@ private:
         esp_lcd_touch_config_t tp_cfg = {
             .x_max = DISPLAY_WIDTH,
             .y_max = DISPLAY_HEIGHT,
-            .rst_gpio_num = GPIO_NUM_23,
+            .rst_gpio_num = GPIO_NUM_NC,
             .int_gpio_num = GPIO_NUM_NC,
             .levels = {
                 .reset = 0,
@@ -355,8 +349,17 @@ private:
             },
         };
         esp_lcd_panel_io_handle_t tp_io_handle = NULL;
-        esp_lcd_panel_io_i2c_config_t tp_io_config = ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG();
-        if (ESP_OK == i2c_device_probe(ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS)) {
+        esp_lcd_panel_io_i2c_config_t tp_io_config = {
+            .dev_addr = ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS, 
+            .control_phase_bytes = 1,
+            .dc_bit_offset = 0,
+            .lcd_cmd_bits = 16,                            
+            .flags =
+            {
+                .disable_control_phase = 1,
+            }
+	    };
+	    if (ESP_OK == i2c_device_probe(ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS)) {
             ESP_LOGI(TAG, "Touch panel found at address 0x%02X", ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS);
         } else if (ESP_OK == i2c_device_probe(ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS_BACKUP)) {
             ESP_LOGI(TAG, "Touch panel found at address 0x%02X", ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS_BACKUP);
