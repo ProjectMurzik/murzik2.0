@@ -2,7 +2,6 @@
 #include <cbin_font.h>
 
 #include <esp_log.h>
-// #include <stdexcept>  // УДАЛЕНО: исключения отключены в ESP-IDF
 #include <cstring>
 #include <esp_heap_caps.h>
 
