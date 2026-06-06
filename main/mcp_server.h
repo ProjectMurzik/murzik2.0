@@ -8,7 +8,8 @@
 #include <variant>
 #include <optional>
 #include <thread>
-#include <esp_log.h> // Добавлено для логирования вместо исключений
+#include <algorithm> // Для std::clamp
+#include <esp_log.h> // КРИТИЧНО: Добавлено для логирования вместо исключений
 #include <mbedtls/base64.h>
 #include <cJSON.h>
 
@@ -163,7 +164,7 @@ public:
             if (p.name() == name) return p;
         }
         ESP_LOGE(MCP_TAG, "Property not found: %s", name.c_str());
-        // Возвращаем статический dummy, чтобы не крашиться без исключений
+        // Возвращаем статический dummy, чтобы избежать краша без исключений
         static Property dummy("error", kPropertyTypeString);
         return dummy;
     }
@@ -310,4 +311,4 @@ private:
     std::vector<McpTool*> tools_;
 };
 
-#endif
+#endif // MCP_SERVER_H
