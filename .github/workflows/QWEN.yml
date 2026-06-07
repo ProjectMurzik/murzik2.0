@@ -116,7 +116,7 @@ jobs:
           grep -E "CONFIG_SPIRAM=y|CONFIG_SPIRAM_MODE_HEX|CONFIG_SPIRAM_SPEED_200M|CONFIG_SPIRAM_BOOT_INIT|CONFIG_SPIRAM_IGNORE_NOTFOUND" build/config/sdkconfig.h || echo "⚠️ PSRAM/MSPI configs not found"
           
           echo "--- MCP / Mimiclaw Agent Dependencies ---"
-          grep -E "CONFIG_MCP_ENABLED|CONFIG_HTTPD_WS_SUPPORT|CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN|CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN|CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC|CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA" build/config/sdkconfig.h || echo "⚠️ MCP/Mimiclaw configs not found"
+          grep -E "CONFIG_MIMI_MCP_CLIENT_ENABLE|CONFIG_HTTPD_WS_SUPPORT|CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN|CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC" build/config/sdkconfig.h || echo "⚠️ MCP/Mimiclaw configs not found"
           
           echo "--- WiFi Remote (ESP32-C6 via SDIO) ---"
           grep -E "CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_WIFI_REMOTE_SDIO_HOST_ID|CONFIG_DRIVER_SDMMC_IRQ_HANDLER_IN_IRAM" build/config/sdkconfig.h || echo "⚠️ WiFi Remote SDIO configs not found"
