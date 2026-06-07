@@ -24,22 +24,30 @@ jobs:
           echo "IDF_PATH=/opt/esp/idf" >> $GITHUB_ENV
           echo "/opt/esp/idf/tools" >> $GITHUB_PATH
 
+      - name: Debug sdkconfig defaults
+        run: |
+          echo "=== File exists? ==="
+          ls -la sdkconfig.defaults.esp32p4 || echo "❌ FILE NOT FOUND!"
+          echo "=== Key flags check ==="
+          grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_MCP_ENABLED|CONFIG_SPIRAM_MODE_HEX|CONFIG_SR_WN_WN10_NIHAO_XIAO_ZHI" sdkconfig.defaults.esp32p4 || echo "❌ CRITICAL FLAGS NOT IN FILE!"
+
       - name: Patch esp_driver_isp missing header (IDF v5.5.2 bug)
         run: |
           . /opt/esp/idf/export.sh
-          ISP_CORE="/opt/esp/idf/components/esp_driver_isp/src/isp_core.c"
-          ISP_AF="/opt/esp/idf/components/esp_driver_isp/src/isp_af.c"
+          ISP_DIR="/opt/esp/idf/components/esp_driver_isp/src"
           
-          # Добавляем #include "esp_memory_utils.h" после #include "esp_log.h"
-          sed -i '/#include "esp_log.h"/a #include "esp_memory_utils.h"' "$ISP_CORE"
-          sed -i '/#include "esp_log.h"/a #include "esp_memory_utils.h"' "$ISP_AF"
+          for f in "$ISP_DIR"/*.c; do
+            if grep -q 'esp_ptr_in_iram\|esp_ptr_internal' "$f" && ! grep -q 'esp_memory_utils.h' "$f"; then
+              sed -i '/#include "esp_log.h"/a #include "esp_memory_utils.h"' "$f"
+              echo "✅ Patched $(basename $f)"
+            fi
+          done
           
-          echo "✅ Patched isp_core.c and isp_af.c with esp_memory_utils.h"
+          echo "✅ All esp_driver_isp source files patched"
 
       - name: Configure and Build
         run: |
           . /opt/esp/idf/export.sh
-          # КРИТИЧНО: Удаляем кэш конфигурации перед сборкой
           rm -rf build/
           idf.py set-target esp32p4
           idf.py build
@@ -83,29 +91,29 @@ jobs:
           echo "--- Display & LVGL ---"
           grep -E "CONFIG_HAVE_LVGL|CONFIG_LV_USE_IMGFONT|CONFIG_LCD_MIPI_DSI|CONFIG_LV_USE_SNAPSHOT" build/config/sdkconfig.h || echo "⚠️ Display configs not found"
           
-          echo "--- Camera & Video ---"
-          grep -E "CONFIG_CAMERA_OV5647|CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI|CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE|CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE" build/config/sdkconfig.h || echo "⚠️ Camera configs not found"
+          echo "--- Camera & Video (MIPI-CSI Native) ---"
+          grep -E "CONFIG_CAMERA_OV5647|CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI|CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE|CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE|CONFIG_ISP_ISR_IRAM_SAFE" build/config/sdkconfig.h || echo "⚠️ Camera/CSI configs not found"
           
           echo "--- Audio & ESP-SR (P4 Specific) ---"
-          grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_ESP_CODEC_DEV_SUPPORT_ES8311|CONFIG_ESP_CODEC_DEV_SUPPORT_ES7210|CONFIG_SR_WN_WN10_NIHAO_XIAO_ZHI" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
+          grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_ESP_CODEC_DEV_SUPPORT_ES8311|CONFIG_ESP_CODEC_DEV_SUPPORT_ES7210|CONFIG_AUDIO_BOARD_CUSTOM" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
           
-          echo "--- PSRAM / MSPI (P4 Specific) ---"
-          grep -E "CONFIG_SPIRAM=y|CONFIG_SPIRAM_MODE_HEX|CONFIG_SPIRAM_SPEED_200M|CONFIG_SPIRAM_BOOT_INIT" build/config/sdkconfig.h || echo "⚠️ PSRAM/MSPI configs not found"
+          echo "--- Wake Word Model (WN10 for P4) ---"
+          grep -E "CONFIG_SR_WN_WN10_NIHAO_XIAO_ZHI|CONFIG_SR_WN_WN10_HI_ESP" build/config/sdkconfig.h || echo "⚠️ Wake Word WN10 config not found"
           
-          echo "--- MCP / Mimiclaw Agent ---"
-          grep -E "CONFIG_MCP_ENABLED|CONFIG_HTTPD_WS_SUPPORT|CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN|CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC" build/config/sdkconfig.h || echo "⚠️ MCP/Mimiclaw configs not found"
+          echo "--- PSRAM / MSPI (P4 HEX Mode) ---"
+          grep -E "CONFIG_SPIRAM=y|CONFIG_SPIRAM_MODE_HEX|CONFIG_SPIRAM_SPEED_200M|CONFIG_SPIRAM_BOOT_INIT|CONFIG_SPIRAM_IGNORE_NOTFOUND" build/config/sdkconfig.h || echo "⚠️ PSRAM/MSPI configs not found"
+          
+          echo "--- MCP / Mimiclaw Agent Dependencies ---"
+          grep -E "CONFIG_MCP_ENABLED|CONFIG_HTTPD_WS_SUPPORT|CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN|CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN|CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC|CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA" build/config/sdkconfig.h || echo "⚠️ MCP/Mimiclaw configs not found"
+          
+          echo "--- WiFi Remote (ESP32-C6 via SDIO) ---"
+          grep -E "CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_WIFI_REMOTE_SDIO_HOST_ID|CONFIG_DRIVER_SDMMC_IRQ_HANDLER_IN_IRAM" build/config/sdkconfig.h || echo "⚠️ WiFi Remote SDIO configs not found"
           
           echo "--- Board & Flash ---"
           grep -E "CONFIG_BOARD_TYPE_WAVESHARE|CONFIG_ESPTOOLPY_FLASHSIZE_32MB|CONFIG_IDF_TARGET_ESP32P4" build/config/sdkconfig.h || echo "⚠️ Board/Flash configs not found"
           
-          echo "--- WiFi Remote (SDIO) ---"
-          grep -E "CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_WIFI_REMOTE_SDIO_HOST_ID|CONFIG_DRIVER_SDMMC_IRQ_HANDLER_IN_IRAM" build/config/sdkconfig.h || echo "⚠️ WiFi Remote SDIO configs not found"
-          
-          echo ""
-          echo "========================================="
-          echo "=== LOG LEVEL VERIFICATION            ==="
-          echo "========================================="
-          grep -E "CONFIG_LOG_DEFAULT_LEVEL|CONFIG_LOG_MAXIMUM_LEVEL|CONFIG_LOG_DYNAMIC" build/config/sdkconfig.h || echo "⚠️ Log level configs not found"
+          echo "--- System & Logging ---"
+          grep -E "CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE|CONFIG_LOG_DEFAULT_LEVEL|CONFIG_LOG_MAXIMUM_LEVEL|CONFIG_LOG_DYNAMIC" build/config/sdkconfig.h || echo "⚠️ System/Log configs not found"
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
