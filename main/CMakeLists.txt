@@ -977,8 +977,13 @@ idf_component_register(SRCS ${SOURCES}
                         efuse
                         bt
                         fatfs
+                        # === ДОБАВИТЬ ДЛЯ РАБОТЫ КАМЕРЫ НА P4 ===
+                        esp_driver_isp
+                        esp_driver_cam
+                        esp_video
+                        # === ДОБАВИТЬ ДЛЯ ЗВУКА И WAKE WORD ===
                         espressif__esp-sr
-                        espressif__esp_codec_dev
+                        espressif__esp_codec_dev 
                     )
 
 # Use target_compile_definitions to define BOARD_TYPE, BOARD_NAME
