@@ -31,19 +31,29 @@ jobs:
           echo "=== Key flags check ==="
           grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_MCP_ENABLED|CONFIG_SPIRAM_MODE_HEX|CONFIG_SR_WN_WN10_NIHAO_XIAO_ZHI" sdkconfig.defaults.esp32p4 || echo "❌ CRITICAL FLAGS NOT IN FILE!"
 
-      - name: Patch esp_driver_isp missing header (IDF v5.5.2 bug)
+      - name: Patch esp_driver_isp bugs (IDF v5.5.2 P4)
         run: |
           . /opt/esp/idf/export.sh
           ISP_DIR="/opt/esp/idf/components/esp_driver_isp/src"
           
+          # 1. Исправляем отсутствующий хедер esp_memory_utils.h
           for f in "$ISP_DIR"/*.c; do
             if grep -q 'esp_ptr_in_iram\|esp_ptr_internal' "$f" && ! grep -q 'esp_memory_utils.h' "$f"; then
               sed -i '/#include "esp_log.h"/a #include "esp_memory_utils.h"' "$f"
-              echo "✅ Patched $(basename $f)"
+              echo "✅ Added esp_memory_utils.h to $(basename $f)"
             fi
           done
           
-          echo "✅ All esp_driver_isp source files patched"
+          # 2. Комментируем обращения к несуществующему полю on_env_change (баг IDF v5.5.2)
+          # Это поле было удалено из структур в P4, но проверки остались в коде
+          for f in "$ISP_DIR"/isp_awb.c "$ISP_DIR"/isp_hist.c; do
+            if [ -f "$f" ] && grep -q 'cbs->on_env_change' "$f"; then
+              sed -i 's/.*cbs->on_env_change.*/\/\/ [PATCHED] Field on_env_change removed in IDF v5.5.2 for P4/' "$f"
+              echo "✅ Patched on_env_change in $(basename $f)"
+            fi
+          done
+          
+          echo "✅ All esp_driver_isp patches applied successfully"
 
       - name: Configure and Build
         run: |
