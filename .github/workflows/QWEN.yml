@@ -24,6 +24,18 @@ jobs:
           echo "IDF_PATH=/opt/esp/idf" >> $GITHUB_ENV
           echo "/opt/esp/idf/tools" >> $GITHUB_PATH
 
+      - name: Patch esp_driver_isp missing header (IDF v5.5.2 bug)
+        run: |
+          . /opt/esp/idf/export.sh
+          ISP_CORE="/opt/esp/idf/components/esp_driver_isp/src/isp_core.c"
+          ISP_AF="/opt/esp/idf/components/esp_driver_isp/src/isp_af.c"
+          
+          # Добавляем #include "esp_memory_utils.h" после #include "esp_log.h"
+          sed -i '/#include "esp_log.h"/a #include "esp_memory_utils.h"' "$ISP_CORE"
+          sed -i '/#include "esp_log.h"/a #include "esp_memory_utils.h"' "$ISP_AF"
+          
+          echo "✅ Patched isp_core.c and isp_af.c with esp_memory_utils.h"
+
       - name: Configure and Build
         run: |
           . /opt/esp/idf/export.sh
@@ -67,20 +79,27 @@ jobs:
           echo "========================================="
           echo "=== SDK CONFIG VERIFICATION           ==="
           echo "========================================="
+          
           echo "--- Display & LVGL ---"
-          grep -E "CONFIG_HAVE_LVGL|CONFIG_LV_USE_IMGFONT|CONFIG_LCD_MIPI_DSI" build/config/sdkconfig.h || echo "⚠️ Display configs not found"
+          grep -E "CONFIG_HAVE_LVGL|CONFIG_LV_USE_IMGFONT|CONFIG_LCD_MIPI_DSI|CONFIG_LV_USE_SNAPSHOT" build/config/sdkconfig.h || echo "⚠️ Display configs not found"
           
           echo "--- Camera & Video ---"
-          grep -E "CONFIG_CAMERA_OV5647|CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI|CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE" build/config/sdkconfig.h || echo "⚠️ Camera configs not found"
+          grep -E "CONFIG_CAMERA_OV5647|CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI|CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE|CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE" build/config/sdkconfig.h || echo "⚠️ Camera configs not found"
           
-          echo "--- Audio & ESP-SR ---"
-          grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_ESP_SR_AFE_SUPPORTED" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
+          echo "--- Audio & ESP-SR (P4 Specific) ---"
+          grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_ESP_CODEC_DEV_SUPPORT_ES8311|CONFIG_ESP_CODEC_DEV_SUPPORT_ES7210|CONFIG_SR_WN_WN10_NIHAO_XIAO_ZHI" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
           
-          echo "--- MCP / MiniClaw Agent ---"
-          grep -E "CONFIG_MCP_ENABLED" build/config/sdkconfig.h || echo "⚠️ MCP config not found"
+          echo "--- PSRAM / MSPI (P4 Specific) ---"
+          grep -E "CONFIG_SPIRAM=y|CONFIG_SPIRAM_MODE_HEX|CONFIG_SPIRAM_SPEED_200M|CONFIG_SPIRAM_BOOT_INIT" build/config/sdkconfig.h || echo "⚠️ PSRAM/MSPI configs not found"
+          
+          echo "--- MCP / Mimiclaw Agent ---"
+          grep -E "CONFIG_MCP_ENABLED|CONFIG_HTTPD_WS_SUPPORT|CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN|CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC" build/config/sdkconfig.h || echo "⚠️ MCP/Mimiclaw configs not found"
           
           echo "--- Board & Flash ---"
           grep -E "CONFIG_BOARD_TYPE_WAVESHARE|CONFIG_ESPTOOLPY_FLASHSIZE_32MB|CONFIG_IDF_TARGET_ESP32P4" build/config/sdkconfig.h || echo "⚠️ Board/Flash configs not found"
+          
+          echo "--- WiFi Remote (SDIO) ---"
+          grep -E "CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_WIFI_REMOTE_SDIO_HOST_ID|CONFIG_DRIVER_SDMMC_IRQ_HANDLER_IN_IRAM" build/config/sdkconfig.h || echo "⚠️ WiFi Remote SDIO configs not found"
           
           echo ""
           echo "========================================="
