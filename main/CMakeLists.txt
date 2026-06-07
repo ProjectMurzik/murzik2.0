@@ -984,6 +984,8 @@ idf_component_register(SRCS ${SOURCES}
                         # === ДОБАВИТЬ ДЛЯ ЗВУКА И WAKE WORD ===
                         espressif__esp-sr
                         espressif__esp_codec_dev 
+                        esp-sr
+                        esp_codec_dev
                     )
 
 # Use target_compile_definitions to define BOARD_TYPE, BOARD_NAME
