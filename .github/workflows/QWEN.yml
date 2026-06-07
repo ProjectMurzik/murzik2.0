@@ -59,8 +59,8 @@ jobs:
       - name: Configure and Build
         run: |
           . /opt/esp/idf/export.sh
-          # КРИТИЧНО: Удаляем кэш конфигурации перед сборкой
-          rm -rf build/
+          # КРИТИЧНО: Полная очистка кэша CMake И менеджера компонентов
+          rm -rf build/ managed_components/ dependencies.lock
           idf.py set-target esp32p4
           idf.py build
 
