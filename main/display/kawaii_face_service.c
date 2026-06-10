@@ -1,6 +1,5 @@
 #include "kawaii_face_service.h"
 #include "lvgl_kawaii_face.h"
-#include "mimi/bus/message_bus.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include <string.h>
@@ -38,7 +37,9 @@ static void reset_to_neutral(void *arg) {
     face_set_emotion(FACE_NEUTRAL, true);
 }
 
-static void on_emotion_event(const char *event_name, void *data) {
+void kawaii_face_set_emotion(const char *event_name) {
+    if (!event_name) return;
+
     for (int i = 0; i < sizeof(EMOTION_MAP) / sizeof(EMOTION_MAP[0]); i++) {
         if (strcmp(event_name, EMOTION_MAP[i].event) == 0) {
             ESP_LOGI(TAG, "Emotion: %s → %d", event_name, EMOTION_MAP[i].emotion);
@@ -70,8 +71,6 @@ void kawaii_face_service_init(lv_obj_t *parent) {
     };
     ESP_ERROR_CHECK(face_animation_init(&cfg));
     face_set_emotion(FACE_NEUTRAL, false);
-
-    message_bus_subscribe("emotion.*", on_emotion_event);
 
     ESP_LOGI(TAG, "Kawaii Face Service initialized with %d emotions",
              (int)(sizeof(EMOTION_MAP) / sizeof(EMOTION_MAP[0])));
