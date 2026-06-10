@@ -1,4 +1,4 @@
-cat > main/display/kawaii_face_service.c << 'EOF'
+#include "kawaii_face_service.h"
 #include "lvgl_kawaii_face.h"
 #include "mimi/bus/message_bus.h"
 #include "esp_log.h"
@@ -7,8 +7,7 @@ cat > main/display/kawaii_face_service.c << 'EOF'
 
 static const char *TAG = "kawaii_face";
 
-// ✅ ЕДИНАЯ ТАБЛИЦА МАППИНГА: событие → эмоция
-// Все 17 эмоций настраиваются ЗДЕСЬ
+// Таблица маппинга событий → эмоции (все 17)
 static const struct {
     const char *event;
     face_emotion_t emotion;
@@ -33,7 +32,6 @@ static const struct {
     {"angry",          FACE_ANGRY},
 };
 
-// Таймер авто-возврата к NEUTRAL
 static esp_timer_handle_t s_reset_timer = NULL;
 
 static void reset_to_neutral(void *arg) {
@@ -41,7 +39,6 @@ static void reset_to_neutral(void *arg) {
 }
 
 static void on_emotion_event(const char *event_name, void *data) {
-    // Ищем эмоцию в таблице
     for (int i = 0; i < sizeof(EMOTION_MAP) / sizeof(EMOTION_MAP[0]); i++) {
         if (strcmp(event_name, EMOTION_MAP[i].event) == 0) {
             ESP_LOGI(TAG, "Emotion: %s → %d", event_name, EMOTION_MAP[i].emotion);
@@ -54,7 +51,7 @@ static void on_emotion_event(const char *event_name, void *data) {
                     esp_timer_create(&args, &s_reset_timer);
                 }
                 esp_timer_stop(s_reset_timer);
-                esp_timer_start_once(s_reset_timer, 5000000); // 5 сек
+                esp_timer_start_once(s_reset_timer, 5000000);
             } else if (s_reset_timer) {
                 esp_timer_stop(s_reset_timer);
             }
@@ -65,20 +62,17 @@ static void on_emotion_event(const char *event_name, void *data) {
 }
 
 void kawaii_face_service_init(lv_obj_t *parent) {
-    // Инициализация анимации лица
     face_config_t cfg = {
         .parent          = parent,
-        .animation_speed = 30,      // ~33 FPS
-        .blink_interval  = 3000,    // Моргание каждые 3 сек
+        .animation_speed = 30,
+        .blink_interval  = 3000,
         .auto_blink      = true,
     };
     ESP_ERROR_CHECK(face_animation_init(&cfg));
     face_set_emotion(FACE_NEUTRAL, false);
 
-    // Подписка на все события эмоций через Message Bus
     message_bus_subscribe("emotion.*", on_emotion_event);
 
     ESP_LOGI(TAG, "Kawaii Face Service initialized with %d emotions",
              (int)(sizeof(EMOTION_MAP) / sizeof(EMOTION_MAP[0])));
 }
-EOF
