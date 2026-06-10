@@ -949,44 +949,52 @@ if(CONFIG_IDF_TARGET_ESP32S3)
     list(APPEND SOURCES "boards/common/esp32_camera.cc")
 endif()
 
-idf_component_register(SRCS ${SOURCES}
-                    EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
-                    INCLUDE_DIRS ${INCLUDE_DIRS}
-                    WHOLE_ARCHIVE
-                    PRIV_REQUIRES
-                        esp_pm
-                        esp_psram
-                        esp_netif
-                        esp_http_client
-                        esp_http_server
-                        json
-                        spiffs
-                        esp-tls
-                        mbedtls
-                        esp_driver_gpio
-                        esp_driver_uart
-                        esp_driver_spi
-                        esp_driver_i2c
-                        esp_driver_i2s
-                        esp_driver_jpeg
-                        esp_driver_ppa
-                        esp_app_format
-                        app_update
-                        spi_flash
-                        console
-                        efuse
-                        bt
-                        fatfs
-                        # === ДОБАВИТЬ ДЛЯ РАБОТЫ КАМЕРЫ НА P4 ===
-                        esp_driver_isp
-                        esp_driver_cam
-                        esp_video
-                        # === ДОБАВИТЬ ДЛЯ ЗВУКА И WAKE WORD ===
-                        espressif__esp-sr
-                        espressif__esp_codec_dev 
-                        esp-sr
-                        esp_codec_dev
-                    )
+idf_component_register(
+    SRCS
+        ${SOURCES}
+        "display/kawaii_face_service.c"      # ← ДОБАВИТЬ
+    EMBED_FILES
+        ${LANG_SOUNDS}
+        ${COMMON_SOUNDS}
+    INCLUDE_DIRS
+        ${INCLUDE_DIRS}
+    WHOLE_ARCHIVE
+    PRIV_REQUIRES
+        esp_pm
+        esp_psram
+        esp_netif
+        esp_http_client
+        esp_http_server
+        json
+        spiffs
+        esp-tls
+        mbedtls
+        esp_driver_gpio
+        esp_driver_uart
+        esp_driver_spi
+        esp_driver_i2c
+        esp_driver_i2s
+        esp_driver_jpeg
+        esp_driver_ppa
+        esp_app_format
+        app_update
+        spi_flash
+        console
+        efuse
+        bt
+        fatfs
+        # === КАМЕРА НА P4 ===
+        esp_driver_isp
+        esp_driver_cam
+        esp_video
+        # === ЗВУК И WAKE WORD ===
+        espressif__esp-sr
+        espressif__esp_codec_dev
+        esp-sr
+        esp_codec_dev
+        # === KAWAII FACE ===
+        lvgl_kawaii_face                     # ← ДОБАВИТЬ
+)
 
 # Use target_compile_definitions to define BOARD_TYPE, BOARD_NAME
 # If BOARD_NAME is empty, use BOARD_TYPE
