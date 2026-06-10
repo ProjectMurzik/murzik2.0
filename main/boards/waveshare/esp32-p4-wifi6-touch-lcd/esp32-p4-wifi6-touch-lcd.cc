@@ -34,6 +34,9 @@
 #include <esp_lvgl_port.h>
 #include "esp_lcd_touch_gt911.h"
 #define TAG "WaveshareEsp32p4"
+extern "C" {
+    #include "display/kawaii_face_service.h"
+}
 
 class WaveshareEsp32p4 : public WifiBoard {
 private:
