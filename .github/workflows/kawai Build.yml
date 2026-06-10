@@ -27,7 +27,7 @@ jobs:
       - name: Clone lvgl_kawaii_face component
         run: |
           echo "=== Cloning lvgl_kawaii_face ==="
-          mkdir -p components
+          mkdir -p components/lvgl_kawaii_face
           git clone --depth 1 https://github.com/0015/lvgl_kawaii_face.git /tmp/lvgl_kawaii_face
           cp -r /tmp/lvgl_kawaii_face/* components/lvgl_kawaii_face/
           rm -rf /tmp/lvgl_kawaii_face
