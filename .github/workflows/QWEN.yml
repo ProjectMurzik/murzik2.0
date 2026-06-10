@@ -1,4 +1,4 @@
-name: Build Murzik Firmware (ESP32-P4)
+name: Build Murzik QWEN
 
 on:
   push:
