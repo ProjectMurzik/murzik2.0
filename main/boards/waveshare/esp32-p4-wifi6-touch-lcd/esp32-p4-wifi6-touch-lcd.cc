@@ -425,7 +425,8 @@ public:
         InitializeButtons();
         GetBacklight()->RestoreBrightness();
         
-        // === ВСТАВИТЬ СЮДА ===
+        // === KAWAII FACE INITIALIZATION ===
+        lvgl_port_lock(0);
         lv_obj_t *face_panel = lv_obj_create(lv_screen_active());
         lv_obj_set_size(face_panel, 300, 300);
         lv_obj_align(face_panel, LV_ALIGN_CENTER, 0, 0);
@@ -433,8 +434,10 @@ public:
         lv_obj_set_style_border_width(face_panel, 0, 0);
         lv_obj_set_style_pad_all(face_panel, 0, 0);
         lv_obj_clear_flag(face_panel, LV_OBJ_FLAG_SCROLLABLE);
+        lvgl_port_unlock();
+        
         kawaii_face_service_init(face_panel);
-        // =======================
+        // ==================================
     }
 
     virtual AudioCodec* GetAudioCodec() override {
