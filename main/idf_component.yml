@@ -91,19 +91,23 @@ dependencies:
   espressif/esp_lcd_ek79007:
     version: ^1.0.3
     rules:
-    - if: target in [esp32p4]
+      - if: target in [esp32p4]
+
+  # === WiFi Remote (ESP32-C6 via SDIO) - FIXED for P4 ===
   espressif/esp_hosted:
-    version: 2.0.17
+    version: ">=2.11.7"
     rules:
-    - if: target in [esp32h2, esp32p4]
+      - if: target in [esp32h2, esp32p4]
+
   espressif/esp_wifi_remote:
-    version: '*'
+    version: ">=1.6.1"
     rules:
-    - if: target in [esp32p4]
+      - if: target in [esp32p4]
+
   espfriends/servo_dog_ctrl:
     version: ^0.1.8
     rules:
-    - if: target in [esp32c3]
+      - if: target in [esp32c3]
 
   llgok/cpp_bus_driver:
     version: 1.1.0
