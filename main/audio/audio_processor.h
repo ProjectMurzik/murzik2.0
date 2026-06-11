@@ -7,7 +7,9 @@
 
 #include <model_path.h>
 #include "audio_codec.h"
-
+extern "C" {
+#include "display/kawaii_face_service.h"
+}
 class AudioProcessor {
 public:
     virtual ~AudioProcessor() = default;
