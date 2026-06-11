@@ -650,7 +650,12 @@ void AudioService::SetCallbacks(AudioServiceCallbacks& callbacks) {
 }
 
 void AudioService::PlaySound(const std::string_view& ogg) {
+    // === KAWAII FACE: System sound ===
+    kawaii_face_set_emotion("success");
+    // =================================
+    
     if (!codec_->output_enabled()) {
+        // ... остальной код без изменений
         esp_timer_stop(audio_power_timer_);
         esp_timer_start_periodic(audio_power_timer_, AUDIO_POWER_CHECK_INTERVAL_MS * 1000);
         codec_->EnableOutput(true);
