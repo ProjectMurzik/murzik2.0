@@ -106,6 +106,13 @@ void AudioService::Initialize(AudioCodec* codec) {
 
     audio_processor_->OnVadStateChange([this](bool speaking) {
         voice_detected_ = speaking;
+        
+        // === KAWAII FACE: VAD Listening ===
+        if (speaking) {
+            kawaii_face_set_emotion("listening");
+        }
+        // ==================================
+        
         if (callbacks_.on_vad_change) {
             callbacks_.on_vad_change(speaking);
         }
@@ -293,6 +300,13 @@ void AudioService::AudioOutputTask() {
     while (true) {
         std::unique_lock<std::mutex> lock(audio_queue_mutex_);
         audio_queue_cv_.wait(lock, [this]() { return !audio_playback_queue_.empty() || service_stopped_; });
+        
+        // === KAWAII FACE: Playback queue empty → Idle ===
+        if (audio_playback_queue_.empty() && !service_stopped_) {
+            kawaii_face_set_emotion("idle");
+        }
+        // ================================================
+        
         if (service_stopped_) {
             break;
         }
