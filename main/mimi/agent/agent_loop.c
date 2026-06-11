@@ -183,11 +183,17 @@ static void agent_loop_task(void *arg)
         err = agent_runner_run(&spec, result);
 
         /* 5. Handle result */
-        if (err != ESP_OK || !result->final_content || !result->final_content[0]) {
-            /* Error response */
-            result->task_success = false;
-            mimi_msg_t out = {0};
-            strncpy(out.channel, msg.channel, sizeof(out.channel) - 1);
+    if (err != ESP_OK || !result->final_content || !result->final_content[0]) {
+        /* Error response */
+        result->task_success = false;
+        
+        // === KAWAII FACE: Error ===
+        kawaii_face_set_emotion("error");
+        // =========================
+        
+        mimi_msg_t out = {0};
+        strncpy(out.channel, msg.channel, sizeof(out.channel) - 1);
+        // ... остальной код без изменений
             strncpy(out.chat_id, msg.chat_id, sizeof(out.chat_id) - 1);
             out.content = strdup("Sorry, I encountered an error.");
             if (out.content && message_bus_push_outbound(&out) != ESP_OK) {
