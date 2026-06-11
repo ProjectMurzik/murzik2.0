@@ -1,7 +1,9 @@
 #include "audio_service.h"
 #include <esp_log.h>
 #include <cstring>
-
+extern "C" {
+#include "display/kawaii_face_service.h"
+}
 #define RATE_CVT_CFG(_src_rate, _dest_rate, _channel)        \
     (esp_ae_rate_cvt_cfg_t)                                  \
     {                                                        \
@@ -306,8 +308,11 @@ void AudioService::AudioOutputTask() {
             codec_->EnableOutput(true);
         }
 
-        codec_->OutputData(task->pcm);
-
+      codec_->OutputData(task->pcm);
+        
+        // === KAWAII FACE: Speaking ===
+        kawaii_face_set_emotion("speaking");
+        // =============================
         /* Update the last output time */
         last_output_time_ = std::chrono::steady_clock::now();
         debug_statistics_.playback_count++;
