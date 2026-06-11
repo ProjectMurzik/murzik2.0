@@ -15,7 +15,7 @@
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "cJSON.h"
-
+#include "display/kawaii_face_service.h"
 static const char *TAG = "agent";
 
 /* Forward declaration */
@@ -122,6 +122,10 @@ static void agent_loop_task(void *arg)
             }
         }
 #endif
+
+        // === KAWAII FACE: Thinking (before LLM call) ===
+        kawaii_face_set_emotion("thinking");
+        // ===============================================
 
         /* 1. Build system prompt */
         context_build_system_prompt(system_prompt, MIMI_CONTEXT_BUF_SIZE);
