@@ -1,4 +1,4 @@
-name: Build Murzik kawai 
+name: Build Murzik kawaii 
 
 on:
   push:
@@ -37,7 +37,7 @@ jobs:
       - name: Debug sdkconfig defaults
         run: |
           echo "=== File exists? ==="
-          ls -la sdkconfig.defaults.esp32p4 || echo "❌ FILE NOT FOUND!"
+          ls -la sdkconfig.defaults.esp32p4 || echo " FILE NOT FOUND!"
           echo "=== Key flags check ==="
           grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_USE_AFE_WAKE_WORD|CONFIG_MIMI_MCP_CLIENT_ENABLE|CONFIG_SPIRAM_MODE_HEX|CONFIG_SR_WN_WN9L_" sdkconfig.defaults.esp32p4 || echo "❌ CRITICAL FLAGS NOT IN FILE!"
 
@@ -69,9 +69,43 @@ jobs:
       - name: Configure and Build
         run: |
           . /opt/esp/idf/export.sh
+          
           # КРИТИЧНО: Полная очистка кэша CMake И менеджера компонентов
           rm -rf build/ managed_components/ dependencies.lock
+          
+          # Установка таргета скачивает зависимости в managed_components/
           idf.py set-target esp32p4
+
+      - name: Patch esp_hosted SDIO RX buffer for PSRAM fallback
+        run: |
+          . /opt/esp/idf/export.sh
+          SDIO_DRV="managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c"
+          
+          if [ -f "$SDIO_DRV" ]; then
+            echo "Patching $SDIO_DRV to allow PSRAM fallback for SDIO RX buffers..."
+            
+            # Заменяем жесткую аллокацию Internal RAM на приоритетную с fallback в PSRAM
+            # Это позволяет драйверу работать даже если внутренняя RAM фрагментирована
+            # Внимание: патчим только data-буферы, не дескрипторы DMA
+            sed -i 's/buf = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);/buf = heap_caps_malloc_prefer(size, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);/g' "$SDIO_DRV"
+            
+            # Проверка, что замена произошла
+            if grep -q "heap_caps_malloc_prefer" "$SDIO_DRV"; then
+              echo "✅ Patch applied successfully! SDIO will use PSRAM as fallback."
+            else
+              echo "❌ Patch failed! The target string was not found or already patched differently."
+              exit 1
+            fi
+          else
+            echo "❌ File not found: $SDIO_DRV"
+            echo "Ensure 'idf.py set-target' has been run to download components."
+            exit 1
+          fi
+
+      - name: Build Firmware
+        run: |
+          . /opt/esp/idf/export.sh
+          # Сборка после применения всех патчей
           idf.py build
 
       - name: Verify firmware components and sizes
@@ -122,7 +156,7 @@ jobs:
           grep -E "CONFIG_HAVE_LVGL|CONFIG_LV_USE_IMGFONT|CONFIG_LCD_MIPI_DSI|CONFIG_LV_USE_SNAPSHOT" build/config/sdkconfig.h || echo "⚠️ Display configs not found"
           
           echo "--- Camera & Video (MIPI-CSI Native) ---"
-          grep -E "CONFIG_CAMERA_OV5647|CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI|CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE|CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE" build/config/sdkconfig.h || echo "⚠️ Camera/CSI configs not found"
+          grep -E "CONFIG_CAMERA_OV5647|CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI|CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE|CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE" build/config/sdkconfig.h || echo "️ Camera/CSI configs not found"
           
           echo "--- Audio & ESP-SR (P4 Specific) ---"
           grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_CODEC_ES8311_SUPPORT|CONFIG_CODEC_ES7210_SUPPORT|CONFIG_AUDIO_BOARD_CUSTOM" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
@@ -137,7 +171,8 @@ jobs:
           grep -E "CONFIG_MIMI_MCP_CLIENT_ENABLE|CONFIG_HTTPD_WS_SUPPORT|CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN|CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC" build/config/sdkconfig.h || echo "⚠️ MCP/Mimiclaw configs not found"
           
           echo "--- WiFi Remote (ESP32-C6 via SDIO) ---"
-          grep -E "CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_WIFI_REMOTE_SDIO_HOST_ID|CONFIG_DRIVER_SDMMC_IRQ_HANDLER_IN_IRAM" build/config/sdkconfig.h || echo "⚠️ WiFi Remote SDIO configs not found"
+          grep -E "CONFIG_ESP_WIFI_REMOTE_ENABLED" build/config/sdkconfig.h || echo "⚠️ WiFi Remote SDIO configs not found"
+          # Примечание: CONFIG_ESP_WIFI_REMOTE_SDIO_HOST_ID и DRIVER_SDMMC_IRQ_HANDLER_IN_IRAM могут быть удалены в новых версиях компонентов
           
           echo "--- Board & Flash ---"
           grep -E "CONFIG_BOARD_TYPE_WAVESHARE|CONFIG_ESPTOOLPY_FLASHSIZE_32MB|CONFIG_IDF_TARGET_ESP32P4" build/config/sdkconfig.h || echo "⚠️ Board/Flash configs not found"
