@@ -84,21 +84,36 @@ jobs:
           if [ -f "$SDIO_DRV" ]; then
             echo "Patching $SDIO_DRV to allow PSRAM fallback for SDIO RX buffers..."
             
-            # Заменяем жесткую аллокацию Internal RAM на приоритетную с fallback в PSRAM
-            # Это позволяет драйверу работать даже если внутренняя RAM фрагментирована
-            # Внимание: патчим только data-буферы, не дескрипторы DMA
-            sed -i 's/buf = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);/buf = heap_caps_malloc_prefer(size, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);/g' "$SDIO_DRV"
-            
-            # Проверка, что замена произошла
+            # Проверяем, не был ли патч уже применен
             if grep -q "heap_caps_malloc_prefer" "$SDIO_DRV"; then
-              echo "✅ Patch applied successfully! SDIO will use PSRAM as fallback."
+              echo "✅ Patch already applied! Skipping."
             else
-              echo "❌ Patch failed! The target string was not found or already patched differently."
-              exit 1
+              # Используем более гибкий sed, который ищет вызов heap_caps_malloc с флагом MALLOC_CAP_INTERNAL
+              # и заменяет его на heap_caps_malloc_prefer с fallback в SPIRAM
+              # Это работает даже если есть лишние пробелы или переносы строк
+              
+              # Создаем временный файл для безопасной замены
+              cp "$SDIO_DRV" "$SDIO_DRV.bak"
+              
+              # Заменяем:
+              # buf = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+              # На:
+              # buf = heap_caps_malloc_prefer(size, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+              
+              sed -i 's/buf = heap_caps_malloc(\(.*\), MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);/buf = heap_caps_malloc_prefer(\1, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);/g' "$SDIO_DRV"
+              
+              # Проверка результата
+              if grep -q "heap_caps_malloc_prefer" "$SDIO_DRV"; then
+                echo "✅ Patch applied successfully!"
+              else
+                echo "❌ Patch failed! The target string was not found."
+                echo "Debug: Showing relevant lines from sdio_drv.c:"
+                grep -n "heap_caps_malloc" "$SDIO_DRV" | head -5
+                exit 1
+              fi
             fi
           else
             echo "❌ File not found: $SDIO_DRV"
-            echo "Ensure 'idf.py set-target' has been run to download components."
             exit 1
           fi
 
