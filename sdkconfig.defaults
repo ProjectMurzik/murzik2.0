@@ -17,3 +17,5 @@ CONFIG_MCP_ENABLED=y
 
 # === Audio Processor ===
 CONFIG_USE_AUDIO_PROCESSOR=y
+
+CONFIG_XIAOZHI_WEBSOCKET_URL="wss://api.tenclass.net/xiaozhi/v1/"
