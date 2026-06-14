@@ -69,29 +69,30 @@ jobs:
           # Установка таргета скачивает зависимости в managed_components/
           idf.py set-target esp32p4
 
-      - name: Patch esp_hosted SDIO driver for PSRAM fallback
+      - name: Patch esp_hosted SDIO driver for PSRAM fallback (Robust)
         run: |
           . /opt/esp/idf/export.sh
           SDIO_DRV="managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c"
           
           if [ -f "$SDIO_DRV" ]; then
-            echo "Patching $SDIO_DRV to allow PSRAM fallback for SDIO RX buffers..."
+            echo "Patching $SDIO_DRV..."
             
-            # Создаем резервную копию
+            # Создаем резервную копию для проверки изменений
             cp "$SDIO_DRV" "$SDIO_DRV.bak"
             
-            # Заменяем жесткую аллокацию Internal RAM на приоритетную с fallback в PSRAM
-            # Это позволяет драйверу работать даже если внутренняя RAM фрагментирована
-            sed -i 's/buf = heap_caps_malloc(\(.*\), MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);/buf = heap_caps_malloc_prefer(\1, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);/g' "$SDIO_DRV"
+            # Универсальная замена: ищем heap_caps_malloc(..., MALLOC_CAP_INTERNAL...) 
+            # и заменяем на heap_caps_malloc_prefer с fallback в SPIRAM
+            # Регулярное выражение захватывает любые аргументы между скобками
+            sed -i 's/heap_caps_malloc(\(.*\), MALLOC_CAP_INTERNAL \(| MALLOC_CAP_DMA\)\?)/heap_caps_malloc_prefer(\1, 2, MALLOC_CAP_INTERNAL \2 | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)/g' "$SDIO_DRV"
             
-            # Проверка, что замена произошла
-            if grep -q "heap_caps_malloc_prefer" "$SDIO_DRV"; then
-              echo "✅ Patch applied successfully! SDIO will use PSRAM as fallback."
+            # Проверяем, внесены ли изменения
+            if ! cmp -s "$SDIO_DRV" "$SDIO_DRV.bak"; then
+              echo "✅ Patch applied successfully! SDIO buffers will use PSRAM as fallback."
               rm "$SDIO_DRV.bak"
             else
-              echo "❌ Patch failed! The target string was not found or already patched differently."
-              echo "Debug: Showing relevant lines from sdio_drv.c:"
-              grep -n "heap_caps_malloc" "$SDIO_DRV" | head -5
+              echo "❌ Patch failed! No changes were made to sdio_drv.c."
+              echo "Debug: Showing lines with MALLOC_CAP_INTERNAL in sdio_drv.c:"
+              grep -n "MALLOC_CAP_INTERNAL" "$SDIO_DRV" | head -5
               exit 1
             fi
           else
