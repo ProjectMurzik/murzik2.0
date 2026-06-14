@@ -79,14 +79,14 @@ jobs:
             exit 1
           fi
 
-          if grep -q "heap_caps_malloc_prefer\|heap_caps_calloc.*MALLOC_CAP_SPIRAM" "$SDIO_DRV"; then
+          if grep -q "heap_caps_malloc_prefer" "$SDIO_DRV"; then
             echo "✅ Patch already applied! Skipping."
             exit 0
           fi
 
           echo "Patching $SDIO_DRV for PSRAM fallback..."
           
-          # Записываем Python-скрипт через printf для избежания конфликтов YAML
+          # Создаем скрипт через printf для безопасности YAML
           printf '%s\n' \
             'import re, sys' \
             '' \
@@ -103,6 +103,7 @@ jobs:
             '        print("Added #include <esp_heap_caps.h>")' \
             '' \
             '    # 2. Патчим mempool_create -> heap_caps_calloc с SPIRAM' \
+            '    # Это решает краш sdio_mempool_create при нехватке внутренней RAM' \
             '    pattern_mempool = r'"'"'mempool_create\(([^)]+)\)'"'"'' \
             '    repl_mempool = r'"'"'heap_caps_calloc(\1, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)'"'"'' \
             '    content, c1 = re.subn(pattern_mempool, repl_mempool, content)' \
