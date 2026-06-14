@@ -336,7 +336,7 @@ void Application::ActivationTask() {
     CheckAssetsVersion();
 
     // Check for new firmware version
-    CheckNewVersion();
+    //CheckNewVersion();
 
     // Initialize the protocol
     InitializeProtocol();
