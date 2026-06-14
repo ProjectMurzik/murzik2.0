@@ -59,7 +59,7 @@ jobs:
           
           echo "=== All esp_driver_isp patches applied successfully ==="
 
-      - name: Configure and Build
+      - name: Configure and Download Components
         run: |
           . /opt/esp/idf/export.sh
           
@@ -69,41 +69,72 @@ jobs:
           # Установка таргета скачивает зависимости в managed_components/
           idf.py set-target esp32p4
 
-      - name: Patch esp_hosted SDIO driver for PSRAM fallback (Robust)
+      - name: Patch esp_hosted SDIO driver for PSRAM fallback (v2.12.9)
         run: |
           . /opt/esp/idf/export.sh
           SDIO_DRV="managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c"
           
-          if [ -f "$SDIO_DRV" ]; then
-            echo "Patching $SDIO_DRV..."
-            
-            # Создаем резервную копию для проверки изменений
-            cp "$SDIO_DRV" "$SDIO_DRV.bak"
-            
-            # Универсальная замена: ищем heap_caps_malloc(..., MALLOC_CAP_INTERNAL...) 
-            # и заменяем на heap_caps_malloc_prefer с fallback в SPIRAM
-            # Регулярное выражение захватывает любые аргументы между скобками
-            sed -i 's/heap_caps_malloc(\(.*\), MALLOC_CAP_INTERNAL \(| MALLOC_CAP_DMA\)\?)/heap_caps_malloc_prefer(\1, 2, MALLOC_CAP_INTERNAL \2 | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)/g' "$SDIO_DRV"
-            
-            # Проверяем, внесены ли изменения
-            if ! cmp -s "$SDIO_DRV" "$SDIO_DRV.bak"; then
-              echo "✅ Patch applied successfully! SDIO buffers will use PSRAM as fallback."
-              rm "$SDIO_DRV.bak"
-            else
-              echo "❌ Patch failed! No changes were made to sdio_drv.c."
-              echo "Debug: Showing lines with MALLOC_CAP_INTERNAL in sdio_drv.c:"
-              grep -n "MALLOC_CAP_INTERNAL" "$SDIO_DRV" | head -5
-              exit 1
-            fi
-          else
+          if [ ! -f "$SDIO_DRV" ]; then
             echo "❌ File not found: $SDIO_DRV"
+            exit 1
+          fi
+
+          # Проверяем, не был ли патч уже применен ранее
+          if grep -q "_h_malloc_prefer\|heap_caps_malloc_prefer" "$SDIO_DRV"; then
+            echo "✅ Patch already applied! Skipping."
+            exit 0
+          fi
+
+          echo "Patching $SDIO_DRV for PSRAM fallback..."
+          
+          # Записываем скрипт через printf для избежания конфликтов YAML
+          printf '%s\n' \
+            'import re, sys' \
+            '' \
+            'file_path = "managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c"' \
+            '' \
+            'try:' \
+            '    with open(file_path, "r") as f:' \
+            '        content = f.read()' \
+            '' \
+            '    if "#include <esp_heap_caps.h>" not in content:' \
+            '        content = "#include <esp_heap_caps.h>\\n" + content' \
+            '        print("✅ Added #include <esp_heap_caps.h>")' \
+            '' \
+            '    pattern = r'"'"'g_h\.funcs\->_h_malloc\(([^)]+)\)'"'"'' \
+            '    replacement = r'"'"'heap_caps_malloc_prefer(\1, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)'"'"'' \
+            '    new_content, count = re.subn(pattern, replacement, content)' \
+            '' \
+            '    if count > 0:' \
+            '        with open(file_path, "w") as f:' \
+            '            f.write(new_content)' \
+            '        print(f"✅ Successfully patched {count} allocation(s)")' \
+            '    else:' \
+            '        print("️ No matching allocations found.")' \
+            '        lines = content.split("\\n")' \
+            '        for i, line in enumerate(lines):' \
+            '            if "_h_malloc" in line:' \
+            '                print(f"Line {i+1}: {line.strip()}")' \
+            '        sys.exit(1)' \
+            '' \
+            'except Exception as e:' \
+            '    print(f"❌ Error during patching: {e}")' \
+            '    sys.exit(1)' \
+            > /tmp/patch_sdio.py
+
+          python3 /tmp/patch_sdio.py
+
+          # Финальная проверка
+          if grep -q "heap_caps_malloc_prefer" "$SDIO_DRV"; then
+            echo "✅ Verification passed: PSRAM fallback is active."
+          else
+            echo "❌ Patch verification failed!"
             exit 1
           fi
 
       - name: Build Firmware
         run: |
           . /opt/esp/idf/export.sh
-          # Сборка после применения всех патчей
           idf.py build
 
       - name: Verify firmware components and sizes
@@ -132,7 +163,7 @@ jobs:
           echo "=== CRITICAL FILES CHECK              ==="
           echo "========================================="
           test -f build/Murzik.bin && echo "✅ Murzik.bin exists" || echo "❌ Murzik.bin MISSING"
-          test -f build/srmodels/srmodels.bin && echo "✅ srmodels.bin exists" || echo "❌ srmodels.bin MISSING"
+          test -f build/srmodels/srmodels.bin && echo "✅ srmodels.bin exists" || echo " srmodels.bin MISSING"
           test -f build/partition_table/partition-table.bin && echo "✅ partition-table.bin exists" || echo "❌ partition-table.bin MISSING"
           test -f build/bootloader/bootloader.bin && echo "✅ bootloader.bin exists" || echo "❌ bootloader.bin MISSING"
           test -f build/ota_data_initial.bin && echo "✅ ota_data_initial.bin exists" || echo "❌ ota_data_initial.bin MISSING"
@@ -160,7 +191,7 @@ jobs:
           grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_CODEC_ES8311_SUPPORT|CONFIG_CODEC_ES7210_SUPPORT|CONFIG_AUDIO_BOARD_CUSTOM" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
           
           echo "--- Wake Word Model (WN9/WN9l for P4) ---"
-          grep -E "CONFIG_SR_WN_WN9_|CONFIG_SR_WN_WN9L_" build/config/sdkconfig.h || echo "⚠️ Wake Word config not found"
+          grep -E "CONFIG_SR_WN_WN9_|CONFIG_SR_WN_WN9L_" build/config/sdkconfig.h || echo "️ Wake Word config not found"
           
           echo "--- PSRAM / MSPI (P4 HEX Mode) ---"
           grep -E "CONFIG_SPIRAM=y|CONFIG_SPIRAM_MODE_HEX|CONFIG_SPIRAM_SPEED_200M|CONFIG_SPIRAM_BOOT_INIT|CONFIG_SPIRAM_IGNORE_NOTFOUND" build/config/sdkconfig.h || echo "⚠️ PSRAM/MSPI configs not found"
