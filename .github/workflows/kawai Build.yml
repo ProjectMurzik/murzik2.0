@@ -86,53 +86,13 @@ jobs:
 
           echo "Patching $SDIO_DRV for PSRAM fallback..."
           
-          # Создаем скрипт через printf для безопасности YAML
-          printf '%s\n' \
-            'import re, sys' \
-            '' \
-            'file_path = "managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c"' \
-            '' \
-            'try:' \
-            '    with open(file_path, "r") as f:' \
-            '        content = f.read()' \
-            '' \
-            '    # 1. Добавляем хедер' \
-            '    header = "#include <esp_heap_caps.h>"' \
-            '    if header not in content:' \
-            '        content = header + "\\n" + content' \
-            '        print("Added #include <esp_heap_caps.h>")' \
-            '' \
-            '    # 2. Патчим mempool_create -> heap_caps_calloc с SPIRAM' \
-            '    # Это решает краш sdio_mempool_create при нехватке внутренней RAM' \
-            '    pattern_mempool = r'"'"'mempool_create\(([^)]+)\)'"'"'' \
-            '    repl_mempool = r'"'"'heap_caps_calloc(\1, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)'"'"'' \
-            '    content, c1 = re.subn(pattern_mempool, repl_mempool, content)' \
-            '' \
-            '    # 3. Патчим _h_malloc -> heap_caps_malloc_prefer' \
-            '    pattern_malloc = r'"'"'g_h\.funcs\->_h_malloc\(([^)]+)\)'"'"'' \
-            '    repl_malloc = r'"'"'heap_caps_malloc_prefer(\1, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)'"'"'' \
-            '    content, c2 = re.subn(pattern_malloc, repl_malloc, content)' \
-            '' \
-            '    if c1 > 0 or c2 > 0:' \
-            '        with open(file_path, "w") as f:' \
-            '            f.write(content)' \
-            '        print(f"Patched {c1} mempool_create and {c2} _h_malloc calls")' \
-            '    else:' \
-            '        print("No patterns matched!")' \
-            '        lines = content.split("\\n")' \
-            '        for i, line in enumerate(lines):' \
-            '            if "mempool_create" in line or "_h_malloc" in line:' \
-            '                print(f"Line {i+1}: {line.strip()}")' \
-            '        sys.exit(1)' \
-            '' \
-            'except Exception as e:' \
-            '    print(f"Error: {e}")' \
-            '    sys.exit(1)' \
-            > /tmp/patch_sdio.py
-
+          # Base64-encoded Python script to avoid ALL YAML parsing issues
+          # Script fixes: 1) Safe header insertion 2) Only replaces mempool_create in assignments
+          echo "aW1wb3J0IHJlCmltcG9ydCBzeXMKCmZpbGVfcGF0aCA9ICJtYW5hZ2VkX2NvbXBvbmVudHMvZXNwcmVzc2lmX19lc3BfaG9zdGVkL2hvc3QvZHJpdmVycy90cmFuc3BvcnQvc2Rpby9zZGlvX2Rydi5jIgoKdHJ5OgogICAgd2l0aCBvcGVuKGZpbGVfcGF0aCwgInIiKSBhcyBmOgogICAgICAgIGNvbnRlbnQgPSBmLnJlYWQoKQoKICAgICMgMS4gU2FmZSBoZWFkZXIgaW5zZXJ0aW9uIChubyBcbiBsaXRlcmFscykKICAgIGhlYWRlciA9ICIjaW5jbHVkZSA8ZXNwX2hlYXBfY2Fwcy5oPiIKICAgIGlmIGhlYWRlciBub3QgaW4gY29udGVudDoKICAgICAgICBjb250ZW50ID0gY29udGVudC5yZXBsYWNlKCIjaW5jbHVkZSIsIGhlYWRlciArICJcbiNpbmNsdWRlIiwgMSkKICAgICAgICBwcmludCgiQWRkZWQgI2luY2x1ZGUgPGVzcF9oZWFwX2NhcHMuaD4iKQoKICAgICMgMi4gUGF0Y2ggbWVtcG9vbF9jcmVhdGUgT05MWSBpbiBhc3NpZ25tZW50cyAoYXZvaWRzIGZ1bmN0aW9uIGRlY2xhcmF0aW9ucykKICAgIHBhdHRlcm5fbWVtcG9vbCA9IHInKD1ccyopbWVtcG9vbF9jcmVhdGVcKChbXildKylcKScKICAgIHJlcGxfbWVtcG9vbCA9IHInXDFoZWFwX2NhcHNfY2FsbG9jKFwyLCAxLCBNQUxMT0NfQ0FQX1NQSVJBTSB8IE1BTExPQ19DQVBfOEJJVCknCiAgICBjb250ZW50LCBjMSA9IHJlLnN1Ym4ocGF0dGVybl9tZW1wb29sLCByZXBsX21lbXBvb2wsIGNvbnRlbnQpCgogICAgIyAzLiBQYXRjaCBfaF9tYWxsb2MgLT4gaGVhcF9jYXBzX21hbGxvY19wcmVmZXIKICAgIHBhdHRlcm5fbWFsbG9jID0gcidnX2hcLmZ1bmNzXC0+X2hfbWFsbG9jXCgoW14pXSspXCknCiAgICByZXBsX21hbGxvYyA9IHInaGVhcF9jYXBzX21hbGxvY19wcmVmZXIoXDEsIDIsIE1BTExPQ19DQVBfSU5URVJOQUwgfCBNQUxMT0NfQ0FQXzhCSVQsIE1BTExPQ19DQVBfU1BJUkFNIHwgTUFMTE9DX0NBUF84QklUKScKICAgIGNvbnRlbnQsIGMyID0gcmUuc3VibihwYXR0ZXJuX21hbGxvYywgcmVwbF9tYWxsb2MsIGNvbnRlbnQpCgogICAgaWYgYzEgPiAwIG9yIGMyID4gMDoKICAgICAgICB3aXRoIG9wZW4oZmlsZV9wYXRoLCAidyIpIGFzIGY6CiAgICAgICAgICAgIGYud3JpdGUoY29udGVudCkKICAgICAgICBwcmludChmIlBhdGNoZWQge2MxfSBtZW1wb29sX2NyZWF0ZSBhbmQge2MyfSBfaF9tYWxsb2MgY2FsbHMiKQogICAgZWxzZToKICAgICAgICBwcmludCgiTm8gcGF0dGVybnMgbWF0Y2hlZCEiKQogICAgICAgIGxpbmVzID0gY29udGVudC5zcGxpdCgiXG4iKQogICAgICAgIGZvciBpLCBsaW5lIGluIGVudW1lcmF0ZShsaW5lcyk6CiAgICAgICAgICAgIGlmICJtZW1wb29sX2NyZWF0ZSIgaW4gbGluZSBvciAiX2hfbWFsbG9jIiBpbiBsaW5lOgogICAgICAgICAgICAgICAgcHJpbnQoZiJMaW5lIHtpKzF9OiB7bGluZS5zdHJpcCgpfSIpCiAgICAgICAgc3lzLmV4aXQoMSkKCmV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgIHByaW50KGYiRXJyb3I6IHtlfSIpCiAgICBzeXMuZXhpdCgxKQ==" | base64 -d > /tmp/patch_sdio.py
+          
           python3 /tmp/patch_sdio.py
 
-          # Финальная проверка
+          # Final verification
           if grep -q "heap_caps_calloc.*MALLOC_CAP_SPIRAM\|heap_caps_malloc_prefer" "$SDIO_DRV"; then
             echo "✅ Verification passed: PSRAM fallback is active for mempool and malloc."
           else
