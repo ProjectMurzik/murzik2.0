@@ -84,9 +84,9 @@ jobs:
             exit 0
           fi
 
-          echo "Patching $SDIO_DRV for PSRAM fallback (mempool + _h_malloc)..."
+          echo "Patching $SDIO_DRV for PSRAM fallback..."
           
-          # Создаем скрипт через printf для безопасности YAML
+          # Записываем Python-скрипт через printf для избежания конфликтов YAML
           printf '%s\n' \
             'import re, sys' \
             '' \
@@ -97,12 +97,12 @@ jobs:
             '        content = f.read()' \
             '' \
             '    # 1. Добавляем хедер' \
-            '    if "#include <esp_heap_caps.h>" not in content:' \
-            '        content = "#include <esp_heap_caps.h>\\n" + content' \
+            '    header = "#include <esp_heap_caps.h>"' \
+            '    if header not in content:' \
+            '        content = header + "\\n" + content' \
             '        print("Added #include <esp_heap_caps.h>")' \
             '' \
             '    # 2. Патчим mempool_create -> heap_caps_calloc с SPIRAM' \
-            '    # Это решает краш sdio_mempool_create при нехватке внутренней RAM' \
             '    pattern_mempool = r'"'"'mempool_create\(([^)]+)\)'"'"'' \
             '    repl_mempool = r'"'"'heap_caps_calloc(\1, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)'"'"'' \
             '    content, c1 = re.subn(pattern_mempool, repl_mempool, content)' \
@@ -170,7 +170,7 @@ jobs:
           echo "=== CRITICAL FILES CHECK              ==="
           echo "========================================="
           test -f build/Murzik.bin && echo "✅ Murzik.bin exists" || echo "❌ Murzik.bin MISSING"
-          test -f build/srmodels/srmodels.bin && echo "✅ srmodels.bin exists" || echo " srmodels.bin MISSING"
+          test -f build/srmodels/srmodels.bin && echo "✅ srmodels.bin exists" || echo "❌ srmodels.bin MISSING"
           test -f build/partition_table/partition-table.bin && echo "✅ partition-table.bin exists" || echo "❌ partition-table.bin MISSING"
           test -f build/bootloader/bootloader.bin && echo "✅ bootloader.bin exists" || echo "❌ bootloader.bin MISSING"
           test -f build/ota_data_initial.bin && echo "✅ ota_data_initial.bin exists" || echo "❌ ota_data_initial.bin MISSING"
@@ -198,7 +198,7 @@ jobs:
           grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_CODEC_ES8311_SUPPORT|CONFIG_CODEC_ES7210_SUPPORT|CONFIG_AUDIO_BOARD_CUSTOM" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
           
           echo "--- Wake Word Model (WN9/WN9l for P4) ---"
-          grep -E "CONFIG_SR_WN_WN9_|CONFIG_SR_WN_WN9L_" build/config/sdkconfig.h || echo "️ Wake Word config not found"
+          grep -E "CONFIG_SR_WN_WN9_|CONFIG_SR_WN_WN9L_" build/config/sdkconfig.h || echo "⚠️ Wake Word config not found"
           
           echo "--- PSRAM / MSPI (P4 HEX Mode) ---"
           grep -E "CONFIG_SPIRAM=y|CONFIG_SPIRAM_MODE_HEX|CONFIG_SPIRAM_SPEED_200M|CONFIG_SPIRAM_BOOT_INIT|CONFIG_SPIRAM_IGNORE_NOTFOUND" build/config/sdkconfig.h || echo "⚠️ PSRAM/MSPI configs not found"
