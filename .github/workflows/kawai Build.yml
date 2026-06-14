@@ -41,7 +41,6 @@ jobs:
           
           echo "=== Patching esp_driver_isp for IDF v5.5.2 ==="
           
-          # 1. Добавляем отсутствующий хедер esp_memory_utils.h
           for f in "$ISP_DIR"/*.c; do
             if grep -q 'esp_ptr_in_iram\|esp_ptr_internal' "$f" && ! grep -q 'esp_memory_utils.h' "$f"; then
               sed -i '/#include "esp_log.h"/a #include "esp_memory_utils.h"' "$f"
@@ -49,7 +48,6 @@ jobs:
             fi
           done
           
-          # 2. Комментируем обращения к несуществующему полю on_env_change (баг IDF v5.5.2)
           for f in "$ISP_DIR"/*.c; do
             if grep -q 'cbs->on_env_change' "$f"; then
               sed -i 's/.*cbs->on_env_change.*/\/\/ [PATCHED] Field on_env_change removed in IDF v5.5.2 for P4/' "$f"
@@ -62,42 +60,8 @@ jobs:
       - name: Configure and Download Components
         run: |
           . /opt/esp/idf/export.sh
-          
-          # КРИТИЧНО: Полная очистка кэша CMake И менеджера компонентов
           rm -rf build/ managed_components/ dependencies.lock
-          
-          # Установка таргета скачивает зависимости в managed_components/
           idf.py set-target esp32p4
-
-      - name: Patch esp_hosted SDIO driver for PSRAM fallback (v2.12.9)
-        run: |
-          . /opt/esp/idf/export.sh
-          SDIO_DRV="managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c"
-          
-          if [ ! -f "$SDIO_DRV" ]; then
-            echo "❌ File not found: $SDIO_DRV"
-            exit 1
-          fi
-
-          if grep -q "heap_caps_malloc_prefer\|heap_caps_calloc.*MALLOC_CAP_SPIRAM" "$SDIO_DRV"; then
-            echo "✅ Patch already applied! Skipping."
-            exit 0
-          fi
-
-          echo "Patching $SDIO_DRV for PSRAM fallback..."
-          
-          # Исправленный base64: все regex используют raw strings (r'...') чтобы избежать bad escape \m
-          echo "aW1wb3J0IHJlCmltcG9ydCBzeXMKCmZpbGVfcGF0aCA9ICJtYW5hZ2VkX2NvbXBvbmVudHMvZXNwcmVzc2lmX19lc3BfaG9zdGVkL2hvc3QvZHJpdmVycy90cmFuc3BvcnQvc2Rpby9zZGlvX2Rydi5jIgoKdHJ5OgogICAgd2l0aCBvcGVuKGZpbGVfcGF0aCwgInIiKSBhcyBmOgogICAgICAgIGNvbnRlbnQgPSBmLnJlYWQoKQoKICAgICMgMS4gU2FmZSBoZWFkZXIgaW5zZXJ0aW9uCiAgICBoZWFkZXIgPSAiI2luY2x1ZGUgPGVzcF9oZWFwX2NhcHMuaD4iCiAgICBpZiBoZWFkZXIgbm90IGluIGNvbnRlbnQ6CiAgICAgICAgY29udGVudCA9IGNvbnRlbnQucmVwbGFjZSgiI2luY2x1ZGUiLCBoZWFkZXIgKyAiXG4jaW5jbHVkZSIsIDEpCiAgICAgICAgcHJpbnQoIkFkZGVkICNpbmNsdWRlIDxlc3BfaGVhcF9jYXBzLmg+IikKCiAgICAjIDIuIFBhdGNoIG1lbXBvb2xfY3JlYXRlIE9OTFkgaW4gYXNzaWdubWVudHMgKHJhdyBzdHJpbmcgZml4ZXMgYmFkIGVzY2FwZSBcbSkKICAgIHBhdHRlcm5fbWVtcG9vbCA9IHInKD1ccyopbWVtcG9vbF9jcmVhdGVcKChbXildKylcKScKICAgIHJlcGxfbWVtcG9vbCA9IHInXDFoZWFwX2NhcHNfY2FsbG9jKFwyLCAxLCBNQUxMT0NfQ0FQX1NQSVJBTSB8IE1BTExPQ19DQVBfOEJJVCknCiAgICBjb250ZW50LCBjMSA9IHJlLnN1Ym4ocGF0dGVybl9tZW1wb29sLCByZXBsX21lbXBvb2wsIGNvbnRlbnQpCgogICAgIyAzLiBQYXRjaCBfaF9tYWxsb2MgLT4gaGVhcF9jYXBzX21hbGxvY19wcmVmZXIgKHJhdyBzdHJpbmcgZml4ZXMgYmFkIGVzY2FwZSBcbSkKICAgIHBhdHRlcm5fbWFsbG9jID0gcidnX2hcLmZ1bmNzXC0+X2hfbWFsbG9jXCgoW14pXSspXCknCiAgICByZXBsX21hbGxvYyA9IHInaGVhcF9jYXBzX21hbGxvY19wcmVmZXIoXDEsIDIsIE1BTExPQ19DQVBfSU5URVJOQUwgfCBNQUxMT0NfQ0FQXzhCSVQsIE1BTExPQ19DQVBfU1BJUkFNIHwgTUFMTE9DX0NBUF84QklUKScKICAgIGNvbnRlbnQsIGMyID0gcmUuc3VibihwYXR0ZXJuX21hbGxvYywgcmVwbF9tYWxsb2MsIGNvbnRlbnQpCgogICAgaWYgYzEgPiAwIG9yIGMyID4gMDoKICAgICAgICB3aXRoIG9wZW4oZmlsZV9wYXRoLCAidyIpIGFzIGY6CiAgICAgICAgICAgIGYud3JpdGUoY29udGVudCkKICAgICAgICBwcmludChmIlBhdGNoZWQge2MxfSBtZW1wb29sX2NyZWF0ZSBhbmQge2MyfSBfaF9tYWxsb2MgY2FsbHMiKQogICAgZWxzZToKICAgICAgICBwcmludCgiTm8gcGF0dGVybnMgbWF0Y2hlZCEiKQogICAgICAgIGxpbmVzID0gY29udGVudC5zcGxpdCgiXG4iKQogICAgICAgIGZvciBpLCBsaW5lIGluIGVudW1lcmF0ZShsaW5lcyk6CiAgICAgICAgICAgIGlmICJtZW1wb29sX2NyZWF0ZSIgaW4gbGluZSBvciAiX2hfbWFsbG9jIiBpbiBsaW5lOgogICAgICAgICAgICAgICAgcHJpbnQoZiJMaW5lIHtpKzF9OiB7bGluZS5zdHJpcCgpfSIpCiAgICAgICAgc3lzLmV4aXQoMSkKCmV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgIHByaW50KGYiRXJyb3I6IHtlfSIpCiAgICBzeXMuZXhpdCgxKQ==" | base64 -d > /tmp/patch_sdio.py
-          
-          python3 /tmp/patch_sdio.py
-
-          # Final verification
-          if grep -q "heap_caps_calloc.*MALLOC_CAP_SPIRAM\|heap_caps_malloc_prefer" "$SDIO_DRV"; then
-            echo "✅ Verification passed: PSRAM fallback is active for mempool and malloc."
-          else
-            echo "❌ Patch verification failed!"
-            exit 1
-          fi
 
       - name: Build Firmware
         run: |
@@ -107,72 +71,26 @@ jobs:
       - name: Verify firmware components and sizes
         run: |
           . /opt/esp/idf/export.sh
-          
-          echo "========================================="
-          echo "=== PARTITION TABLE VERIFICATION      ==="
-          echo "========================================="
           idf.py partition-table
-          
-          echo ""
-          echo "========================================="
-          echo "=== FIRMWARE BINARY SIZE              ==="
-          echo "========================================="
           ls -lh build/Murzik.bin
-          
-          echo ""
-          echo "========================================="
-          echo "=== ELF SECTIONS SIZE                 ==="
-          echo "========================================="
           riscv32-esp-elf-size -A build/Murzik.elf | head -25
-          
-          echo ""
-          echo "========================================="
-          echo "=== CRITICAL FILES CHECK              ==="
-          echo "========================================="
           test -f build/Murzik.bin && echo "✅ Murzik.bin exists" || echo "❌ Murzik.bin MISSING"
           test -f build/srmodels/srmodels.bin && echo "✅ srmodels.bin exists" || echo "❌ srmodels.bin MISSING"
           test -f build/partition_table/partition-table.bin && echo "✅ partition-table.bin exists" || echo "❌ partition-table.bin MISSING"
           test -f build/bootloader/bootloader.bin && echo "✅ bootloader.bin exists" || echo "❌ bootloader.bin MISSING"
           test -f build/ota_data_initial.bin && echo "✅ ota_data_initial.bin exists" || echo "❌ ota_data_initial.bin MISSING"
-          
-          echo ""
-          echo "========================================="
-          echo "=== KAWAII FACE COMPONENT CHECK       ==="
-          echo "========================================="
           test -f components/lvgl_kawaii_face/lvgl_kawaii_face.c && echo "✅ lvgl_kawaii_face.c exists" || echo "❌ lvgl_kawaii_face.c MISSING"
           test -f components/lvgl_kawaii_face/include/lvgl_kawaii_face.h && echo "✅ lvgl_kawaii_face.h exists" || echo "❌ lvgl_kawaii_face.h MISSING"
           test -f components/lvgl_kawaii_face/CMakeLists.txt && echo "✅ CMakeLists.txt exists" || echo "❌ CMakeLists.txt MISSING"
           
-          echo ""
-          echo "========================================="
-          echo "=== SDK CONFIG VERIFICATION           ==="
-          echo "========================================="
-          
-          echo "--- Display & LVGL ---"
           grep -E "CONFIG_HAVE_LVGL|CONFIG_LV_USE_IMGFONT|CONFIG_LCD_MIPI_DSI|CONFIG_LV_USE_SNAPSHOT" build/config/sdkconfig.h || echo "⚠️ Display configs not found"
-          
-          echo "--- Camera & Video (MIPI-CSI Native) ---"
           grep -E "CONFIG_CAMERA_OV5647|CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI|CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE|CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE" build/config/sdkconfig.h || echo "⚠️ Camera/CSI configs not found"
-          
-          echo "--- Audio & ESP-SR (P4 Specific) ---"
           grep -E "CONFIG_USE_AUDIO_PROCESSOR|CONFIG_ESP_SR_ENABLE|CONFIG_CODEC_ES8311_SUPPORT|CONFIG_CODEC_ES7210_SUPPORT|CONFIG_AUDIO_BOARD_CUSTOM" build/config/sdkconfig.h || echo "⚠️ Audio/SR configs not found"
-          
-          echo "--- Wake Word Model (WN9/WN9l for P4) ---"
           grep -E "CONFIG_SR_WN_WN9_|CONFIG_SR_WN_WN9L_" build/config/sdkconfig.h || echo "⚠️ Wake Word config not found"
-          
-          echo "--- PSRAM / MSPI (P4 HEX Mode) ---"
-          grep -E "CONFIG_SPIRAM=y|CONFIG_SPIRAM_MODE_HEX|CONFIG_SPIRAM_SPEED_200M|CONFIG_SPIRAM_BOOT_INIT|CONFIG_SPIRAM_IGNORE_NOTFOUND" build/config/sdkconfig.h || echo "⚠️ PSRAM/MSPI configs not found"
-          
-          echo "--- MCP / Mimiclaw Agent Dependencies ---"
+          grep -E "CONFIG_SPIRAM=y|CONFIG_SPIRAM_MODE_HEX|CONFIG_SPIRAM_SPEED_200M|CONFIG_SPIRAM_BOOT_INIT|CONFIG_SPIRAM_IGNORE_NOTFOUND|CONFIG_ESP_HOSTED_MEMPOOL_PREFER_SPIRAM" build/config/sdkconfig.h || echo "⚠️ PSRAM/MSPI configs not found"
           grep -E "CONFIG_MIMI_MCP_CLIENT_ENABLE|CONFIG_HTTPD_WS_SUPPORT|CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN|CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC" build/config/sdkconfig.h || echo "⚠️ MCP/Mimiclaw configs not found"
-          
-          echo "--- WiFi Remote (ESP32-C6 via SDIO) ---"
           grep -E "CONFIG_ESP_WIFI_REMOTE_ENABLED" build/config/sdkconfig.h || echo "⚠️ WiFi Remote SDIO configs not found"
-          
-          echo "--- Board & Flash ---"
           grep -E "CONFIG_BOARD_TYPE_WAVESHARE|CONFIG_ESPTOOLPY_FLASHSIZE_32MB|CONFIG_IDF_TARGET_ESP32P4" build/config/sdkconfig.h || echo "⚠️ Board/Flash configs not found"
-          
-          echo "--- System & Logging ---"
           grep -E "CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE|CONFIG_LOG_DEFAULT_LEVEL|CONFIG_LOG_MAXIMUM_LEVEL|CONFIG_LOG_DYNAMIC_LEVEL_CONTROL" build/config/sdkconfig.h || echo "⚠️ System/Log configs not found"
 
       - name: Upload firmware artifact
