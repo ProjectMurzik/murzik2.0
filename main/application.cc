@@ -267,26 +267,24 @@ void Application::Run() {
 }
 
 void Application::HandleNetworkConnectedEvent() {
-    ESP_LOGI(TAG, "Network connected");
-    auto state = GetDeviceState();
-
-    if (state == kDeviceStateStarting || state == kDeviceStateWifiConfiguring) {
-        // Network is ready, start activation
-        SetDeviceState(kDeviceStateActivating);
-        if (activation_task_handle_ != nullptr) {
-            ESP_LOGW(TAG, "Activation task already running");
-            return;
-        }
-
-        xTaskCreate([](void* arg) {
-            Application* app = static_cast<Application*>(arg);
-            app->ActivationTask();
-            app->activation_task_handle_ = nullptr;
-            vTaskDelete(NULL);
-        }, "activation", 4096 * 6, this, 2, &activation_task_handle_);
+    ESP_LOGI(TAG, "Network connected - forcing activation");
+    
+    // Принудительно переходим в activating, игнорируя любые фантомные состояния
+    SetDeviceState(kDeviceStateActivating);
+    
+    if (activation_task_handle_ != nullptr) {
+        ESP_LOGW(TAG, "Activation task already running");
+        return;
     }
+    
+    // Запускаем задачу получения кода от сервера
+    xTaskCreate([](void* arg) {
+        Application* app = static_cast<Application*>(arg);
+        app->ActivationTask();
+        app->activation_task_handle_ = nullptr;
+        vTaskDelete(NULL);
+    }, "activation", 4096 * 6, this, 2, &activation_task_handle_);
 
-    // Update the status bar immediately to show the network state
     auto display = Board::GetInstance().GetDisplay();
     display->UpdateStatusBar(true);
 }
