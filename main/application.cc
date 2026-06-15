@@ -278,16 +278,24 @@ void Application::HandleNetworkConnectedEvent() {
     }
     
     // Запускаем задачу получения кода от сервера
-esp_err_t ret = xTaskCreate([](void* arg) {
-    Application* app = static_cast<Application*>(arg);
-    app->ActivationTask();
-    app->activation_task_handle_ = nullptr;
-    vTaskDelete(NULL);
-}, "activation", 4096 * 4, this, 2, &activation_task_handle_);
+    // Запускаем задачу получения кода от сервера (12 КБ стека — безопасный компромисс)
+    esp_err_t ret = xTaskCreate([](void* arg) {
+        Application* app = static_cast<Application*>(arg);
+        app->ActivationTask();
+        
+        // Мониторинг: показываем, сколько стека реально осталось неиспользованным
+        // Если значение близко к 0 — значит, стек был на грани. 
+        // Нормальное значение должно быть > 500.
+        ESP_LOGI(TAG, "Activation task stack high water mark: %u bytes", 
+                 uxTaskGetStackHighWaterMark(NULL));
+                 
+        app->activation_task_handle_ = nullptr;
+        vTaskDelete(NULL);
+    }, "activation", 4096 * 3, this, 2, &activation_task_handle_);
 
-if (ret != pdPASS) {
-    ESP_LOGE(TAG, "Failed to create activation task: %s", esp_err_to_name(ret));
-}
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create activation task: %s", esp_err_to_name(ret));
+    }
 
     auto display = Board::GetInstance().GetDisplay();
     display->UpdateStatusBar(true);
