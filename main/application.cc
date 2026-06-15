@@ -269,7 +269,6 @@ void Application::Run() {
 void Application::HandleNetworkConnectedEvent() {
     ESP_LOGI(TAG, "Network connected - forcing activation");
     
-    // Принудительно переходим в activating, игнорируя любые фантомные состояния
     SetDeviceState(kDeviceStateActivating);
     
     if (activation_task_handle_ != nullptr) {
@@ -277,15 +276,12 @@ void Application::HandleNetworkConnectedEvent() {
         return;
     }
     
-    // Запускаем задачу получения кода от сервера
     // Запускаем задачу получения кода от сервера (12 КБ стека — безопасный компромисс)
     esp_err_t ret = xTaskCreate([](void* arg) {
         Application* app = static_cast<Application*>(arg);
         app->ActivationTask();
         
         // Мониторинг: показываем, сколько стека реально осталось неиспользованным
-        // Если значение близко к 0 — значит, стек был на грани. 
-        // Нормальное значение должно быть > 500.
         ESP_LOGI(TAG, "Activation task stack high water mark: %u bytes", 
                  uxTaskGetStackHighWaterMark(NULL));
                  
@@ -296,6 +292,10 @@ void Application::HandleNetworkConnectedEvent() {
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create activation task: %s", esp_err_to_name(ret));
     }
+    
+    auto display = Board::GetInstance().GetDisplay();
+    display->UpdateStatusBar(true);
+}
 
     auto display = Board::GetInstance().GetDisplay();
     display->UpdateStatusBar(true);
