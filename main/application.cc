@@ -283,7 +283,7 @@ esp_err_t ret = xTaskCreate([](void* arg) {
     app->ActivationTask();
     app->activation_task_handle_ = nullptr;
     vTaskDelete(NULL);
-}, "activation", 4096 * 2, this, 2, &activation_task_handle_);
+}, "activation", 4096 * 4, this, 2, &activation_task_handle_);
 
 if (ret != pdPASS) {
     ESP_LOGE(TAG, "Failed to create activation task: %s", esp_err_to_name(ret));
