@@ -14,6 +14,7 @@ static const char* const STATE_STRINGS[] = {
     "connecting",
     "listening",
     "speaking",
+    "thinking",        // <-- ДОБАВЬ ЭТУ СТРОКУ
     "upgrading",
     "activating",
     "audio_testing",
