@@ -327,19 +327,19 @@ void Application::HandleActivationDoneEvent() {
 }
 
 void Application::ActivationTask() {
-    // Create OTA object for activation process
+    ESP_LOGI(TAG, ">>> ActivationTask started");
     ota_ = std::make_unique<Ota>();
-
-    // Check for new assets version
+    
+    ESP_LOGI(TAG, ">>> Checking assets...");
     CheckAssetsVersion();
-
-    // Check for new firmware version
-    CheckNewVersion();
-
-    // Initialize the protocol
+    
+    ESP_LOGI(TAG, ">>> Checking new version / activation...");
+    CheckNewVersion(); // <-- ОБЯЗАТЕЛЬНО РАСКОММЕНТИРОВАТЬ!
+    
+    ESP_LOGI(TAG, ">>> Initializing protocol...");
     InitializeProtocol();
-
-    // Signal completion to main loop
+    
+    ESP_LOGI(TAG, ">>> ActivationTask finished");
     xEventGroupSetBits(event_group_, MAIN_EVENT_ACTIVATION_DONE);
 }
 
