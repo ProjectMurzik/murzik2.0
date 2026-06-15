@@ -278,12 +278,16 @@ void Application::HandleNetworkConnectedEvent() {
     }
     
     // Запускаем задачу получения кода от сервера
-    xTaskCreate([](void* arg) {
-        Application* app = static_cast<Application*>(arg);
-        app->ActivationTask();
-        app->activation_task_handle_ = nullptr;
-        vTaskDelete(NULL);
-    }, "activation", 4096 * 6, this, 2, &activation_task_handle_);
+esp_err_t ret = xTaskCreate([](void* arg) {
+    Application* app = static_cast<Application*>(arg);
+    app->ActivationTask();
+    app->activation_task_handle_ = nullptr;
+    vTaskDelete(NULL);
+}, "activation", 4096 * 2, this, 2, &activation_task_handle_);
+
+if (ret != pdPASS) {
+    ESP_LOGE(TAG, "Failed to create activation task: %s", esp_err_to_name(ret));
+}
 
     auto display = Board::GetInstance().GetDisplay();
     display->UpdateStatusBar(true);
