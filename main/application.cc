@@ -276,7 +276,7 @@ void Application::HandleNetworkConnectedEvent() {
         return;
     }
     
-    // Запускаем задачу получения кода от сервера (12 КБ стека — безопасный компромисс)
+    // Запускаем задачу получения кода от сервера (12 КБ стека)
     esp_err_t ret = xTaskCreate([](void* arg) {
         Application* app = static_cast<Application*>(arg);
         app->ActivationTask();
