@@ -1,5 +1,4 @@
 #include "box_audio_codec.h"
-
 #include <esp_log.h>
 #include <driver/i2c_master.h>
 #include <driver/i2s_tdm.h>
@@ -7,8 +6,8 @@
 #define TAG "BoxAudioCodec"
 
 BoxAudioCodec::BoxAudioCodec(void* i2c_master_handle, int input_sample_rate, int output_sample_rate,
-    gpio_num_t mclk, gpio_num_t bclk, gpio_num_t ws, gpio_num_t dout, gpio_num_t din,
-    gpio_num_t pa_pin, uint8_t es8311_addr, uint8_t es7210_addr, bool input_reference) {
+                             gpio_num_t mclk, gpio_num_t bclk, gpio_num_t ws, gpio_num_t dout, gpio_num_t din,
+                             gpio_num_t pa_pin, uint8_t es8311_addr, uint8_t es7210_addr, bool input_reference) {
     duplex_ = true; // 是否双工
     input_reference_ = input_reference; // 是否使用参考输入，实现回声消除
     input_channels_ = input_reference_ ? 2 : 1; // 输入通道数
@@ -58,7 +57,7 @@ BoxAudioCodec::BoxAudioCodec(void* i2c_master_handle, int input_sample_rate, int
     output_dev_ = esp_codec_dev_new(&dev_cfg);
     assert(output_dev_ != NULL);
 
-    // Input
+    // Input (ES7210 Microphone) - Safe initialization
     i2c_cfg.addr = es7210_addr;
     in_ctrl_if_ = audio_codec_new_i2c_ctrl(&i2c_cfg);
     assert(in_ctrl_if_ != NULL);
@@ -67,28 +66,54 @@ BoxAudioCodec::BoxAudioCodec(void* i2c_master_handle, int input_sample_rate, int
     es7210_cfg.ctrl_if = in_ctrl_if_;
     es7210_cfg.mic_selected = ES7210_SEL_MIC1 | ES7210_SEL_MIC2 | ES7210_SEL_MIC3 | ES7210_SEL_MIC4;
     in_codec_if_ = es7210_codec_new(&es7210_cfg);
-    assert(in_codec_if_ != NULL);
+    // assert(in_codec_if_ != NULL); // <-- УБРАЛИ ЖЕСТКИЙ ASSERT
 
-    dev_cfg.dev_type = ESP_CODEC_DEV_TYPE_IN;
-    dev_cfg.codec_if = in_codec_if_;
-    input_dev_ = esp_codec_dev_new(&dev_cfg);
-    assert(input_dev_ != NULL);
+    if (in_codec_if_ == nullptr) {
+        ESP_LOGE(TAG, "ES7210 codec not initialized at addr 0x%02X - microphone disabled", es7210_addr);
+        input_dev_ = nullptr; // Помечаем, что микрофона нет
+    } else {
+        dev_cfg.dev_type = ESP_CODEC_DEV_TYPE_IN;
+        dev_cfg.codec_if = in_codec_if_;
+        input_dev_ = esp_codec_dev_new(&dev_cfg);
+        assert(input_dev_ != NULL);
+    }
 
     ESP_LOGI(TAG, "BoxAudioDevice initialized");
 }
 
 BoxAudioCodec::~BoxAudioCodec() {
-    ESP_ERROR_CHECK(esp_codec_dev_close(output_dev_));
-    esp_codec_dev_delete(output_dev_);
-    ESP_ERROR_CHECK(esp_codec_dev_close(input_dev_));
-    esp_codec_dev_delete(input_dev_);
-
-    audio_codec_delete_codec_if(in_codec_if_);
-    audio_codec_delete_ctrl_if(in_ctrl_if_);
-    audio_codec_delete_codec_if(out_codec_if_);
-    audio_codec_delete_ctrl_if(out_ctrl_if_);
-    audio_codec_delete_gpio_if(gpio_if_);
-    audio_codec_delete_data_if(data_if_);
+    // Safe cleanup for Output
+    if (output_dev_ != nullptr) {
+        ESP_ERROR_CHECK(esp_codec_dev_close(output_dev_));
+        esp_codec_dev_delete(output_dev_);
+    }
+    
+    // Safe cleanup for Input
+    if (input_dev_ != nullptr) {
+        ESP_ERROR_CHECK(esp_codec_dev_close(input_dev_));
+        esp_codec_dev_delete(input_dev_);
+    }
+    
+    if (in_codec_if_ != nullptr) {
+        audio_codec_delete_codec_if(in_codec_if_);
+    }
+    if (in_ctrl_if_ != nullptr) {
+        audio_codec_delete_ctrl_if(in_ctrl_if_);
+    }
+    
+    if (out_codec_if_ != nullptr) {
+        audio_codec_delete_codec_if(out_codec_if_);
+    }
+    if (out_ctrl_if_ != nullptr) {
+        audio_codec_delete_ctrl_if(out_ctrl_if_);
+    }
+    
+    if (gpio_if_ != nullptr) {
+        audio_codec_delete_gpio_if(gpio_if_);
+    }
+    if (data_if_ != nullptr) {
+        audio_codec_delete_data_if(data_if_);
+    }
 }
 
 void BoxAudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gpio_num_t ws, gpio_num_t dout, gpio_num_t din) {
@@ -178,6 +203,7 @@ void BoxAudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gpio_
     ESP_ERROR_CHECK(i2s_channel_init_tdm_mode(rx_handle_, &tdm_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(tx_handle_));
     ESP_ERROR_CHECK(i2s_channel_enable(rx_handle_));
+
     ESP_LOGI(TAG, "Duplex channels created");
 }
 
@@ -188,6 +214,13 @@ void BoxAudioCodec::SetOutputVolume(int volume) {
 
 void BoxAudioCodec::EnableInput(bool enable) {
     std::lock_guard<std::mutex> lock(data_if_mutex_);
+    
+    // Защита от включения микрофона, если ES7210 не инициализирован
+    if (input_dev_ == nullptr) {
+        ESP_LOGW(TAG, "Cannot enable input: ES7210 microphone is not initialized");
+        return; 
+    }
+    
     if (enable == input_enabled_) {
         return;
     }
@@ -233,9 +266,13 @@ void BoxAudioCodec::EnableOutput(bool enable) {
 }
 
 int BoxAudioCodec::Read(int16_t* dest, int samples) {
-    if (input_enabled_) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_read(input_dev_, (void*)dest, samples * sizeof(int16_t)));
+    // Защита от чтения, если микрофон отсутствует
+    if (!input_enabled_ || input_dev_ == nullptr) {
+        // Возвращаем тишину (нули), чтобы не ломать аудио-пайплайн
+        memset(dest, 0, samples * sizeof(int16_t));
+        return samples;
     }
+    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_read(input_dev_, (void*)dest, samples * sizeof(int16_t)));
     return samples;
 }
 
