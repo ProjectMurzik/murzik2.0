@@ -297,10 +297,6 @@ void Application::HandleNetworkConnectedEvent() {
     display->UpdateStatusBar(true);
 }
 
-    auto display = Board::GetInstance().GetDisplay();
-    display->UpdateStatusBar(true);
-}
-
 void Application::HandleNetworkDisconnectedEvent() {
     // Close current conversation when network disconnected
     auto state = GetDeviceState();
