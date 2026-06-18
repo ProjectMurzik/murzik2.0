@@ -34,24 +34,43 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
         models = models_list;
     }
 
-    char* ns_model_name = esp_srmodel_filter(models, ESP_NSNET_PREFIX, NULL);
-    char* vad_model_name = esp_srmodel_filter(models, ESP_VADN_PREFIX, NULL);
-    
-    afe_config_t* afe_config = afe_config_init(input_format.c_str(), NULL, AFE_TYPE_VC, AFE_MODE_HIGH_PERF);
-    afe_config->aec_mode = AEC_MODE_VOIP_HIGH_PERF;
-    afe_config->vad_mode = VAD_MODE_0;
-    afe_config->vad_min_noise_ms = 100;
-    if (vad_model_name != nullptr) {
-        afe_config->vad_model_name = vad_model_name;
-    }
+char* ns_model_name = esp_srmodel_filter(models, ESP_NSNET_PREFIX, NULL);
+char* vad_model_name = esp_srmodel_filter(models, ESP_VADN_PREFIX, NULL);
+// ✅ ДОБАВЛЕНО: Ищем модель wake word
+char* wakenet_model_name = esp_srmodel_filter(models, ESP_WN_PREFIX, NULL);
 
-    if (ns_model_name != nullptr) {
-        afe_config->ns_init = true;
-        afe_config->ns_model_name = ns_model_name;
-        afe_config->afe_ns_mode = AFE_NS_MODE_NET;
-    } else {
-        afe_config->ns_init = false;
-    }
+if (wakenet_model_name != nullptr) {
+    ESP_LOGI(TAG, "✅ Wake word model found: %s", wakenet_model_name);
+} else {
+    ESP_LOGW(TAG, "⚠️ Wake word model NOT found! Wake word will not work.");
+}
+
+// ✅ ИСПРАВЛЕНО: Передаём wakenet_model_name вместо NULL
+afe_config_t* afe_config = afe_config_init(input_format.c_str(), wakenet_model_name, AFE_TYPE_VC, AFE_MODE_HIGH_PERF);
+afe_config->aec_mode = AEC_MODE_VOIP_HIGH_PERF;
+afe_config->vad_mode = VAD_MODE_0;
+afe_config->vad_min_noise_ms = 100;
+if (vad_model_name != nullptr) {
+    afe_config->vad_model_name = vad_model_name;
+}
+
+if (ns_model_name != nullptr) {
+    afe_config->ns_init = true;
+    afe_config->ns_model_name = ns_model_name;
+    afe_config->afe_ns_mode = AFE_NS_MODE_NET;
+} else {
+    afe_config->ns_init = false;
+}
+
+// ✅ ДОБАВЛЕНО: Настраиваем wake word
+if (wakenet_model_name != nullptr) {
+    afe_config->wakenet_init = true;
+    afe_config->wakenet_model_name = wakenet_model_name;
+    afe_config->wakenet_mode = DET_MODE_90;  // Чувствительность 90%
+    ESP_LOGI(TAG, "✅ Wake word configured with sensitivity DET_MODE_90");
+} else {
+    afe_config->wakenet_init = false;
+}
 
     afe_config->agc_init = false;
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
