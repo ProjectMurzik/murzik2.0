@@ -146,8 +146,11 @@ esp_err_t mimiclaw_init(void)
              (int)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
 
     /* Initialize FATFS (for memory/sessions/skills storage) */
-    ESP_ERROR_CHECK(init_fatfs());
-
+    esp_err_t ret = init_fatfs();
+    if (ret != ESP_OK) {
+    ESP_LOGW(TAG, "FATFS mount failed: %s. Mimiclaw will work without persistent storage.", esp_err_to_name(ret));
+    // Продолжаем работу без FATFS
+}
     /* Initialize core subsystems */
     ESP_ERROR_CHECK(message_bus_init());
     ESP_ERROR_CHECK(http_proxy_init());
