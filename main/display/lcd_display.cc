@@ -249,7 +249,7 @@ MipiLcdDisplay::MipiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel
         .io_handle = panel_io,
         .panel_handle = panel,
         .control_handle = nullptr,
-        .buffer_size = static_cast<uint32_t>(width_ * 50),
+        .buffer_size = static_cast<uint32_t>(width_ * 40),  // Уменьшили с 50 до 40 (экономия ~16 КБ)
         .double_buffer = false,
         .hres = static_cast<uint32_t>(width_),
         .vres = static_cast<uint32_t>(height_),
@@ -262,7 +262,7 @@ MipiLcdDisplay::MipiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel
         },
         .flags = {
             .buff_dma = true,
-            .buff_spiram =false,
+            .buff_spiram = true,    // ✅ ПЕРЕНЕСЛИ БУФЕР В PSRAM!
             .sw_rotate = true,
         },
     };
