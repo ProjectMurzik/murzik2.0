@@ -1,6 +1,7 @@
 {
     "language": {
-        "type": "ru-RU"
+        "type": "ru-RU",
+        "code": "ru-RU"
     },
     "strings": {
         "WARNING": "Предупреждение",
@@ -22,7 +23,7 @@
         "CONNECTING": "Подключение...",
         "CONNECTED_TO": "Подключено к ",
         "LISTENING": "Прослушивание...",
-        "THINKING": "Thinking...",
+        "THINKING": "Думаю...",
         "SPEAKING": "Говорение...",
         "SERVER_NOT_FOUND": "Поиск доступного сервиса",
         "SERVER_NOT_CONNECTED": "Невозможно подключиться к сервису, попробуйте позже",
