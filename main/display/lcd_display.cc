@@ -3,7 +3,7 @@
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "assets/lang_config.h"
-
+#include "display/kawaii_face_service.h"
 #include <vector>
 #include <algorithm>
 #include <font_awesome.h>
