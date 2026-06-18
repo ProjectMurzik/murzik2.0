@@ -1099,43 +1099,43 @@ void LcdDisplay::SetEmotion(const char* emotion) {
     if (image == nullptr) {
         const char* utf8 = font_awesome_get_utf8(emotion);
         if (utf8 != nullptr && emoji_label_ != nullptr) {
-            // Emote animation disabled - commented out
-            // DisplayLockGuard lock(this);
-            // lv_label_set_text(emoji_label_, utf8);
-            // lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
-            // lv_obj_remove_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+            // ✅ РАСКОММЕНТИРОВАНО: Отображаем Font Awesome эмодзи
+            DisplayLockGuard lock(this);
+            lv_label_set_text(emoji_label_, utf8);
+            lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
         }
         return;
     }
 
-    // Emote animation disabled - all commented out
-    // DisplayLockGuard lock(this);
-    // if (image->IsGif()) {
-    //     // Create new GIF controller
-    //     gif_controller_ = std::make_unique<LvglGif>(image->image_dsc());
-    //
-    //     if (gif_controller_->IsLoaded()) {
-    //         // Set up frame update callback
-    //         gif_controller_->SetFrameCallback([this]() {
-    //             lv_image_set_src(emoji_image_, gif_controller_->image_dsc());
-    //         });
-    //
-    //         // Set initial frame and start animation
-    //         lv_image_set_src(emoji_image_, gif_controller_->image_dsc());
-    //         gif_controller_->Start();
-    //
-    //         // Show GIF, hide others
-    //         lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
-    //         lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
-    //     } else {
-    //         ESP_LOGE(TAG, "Failed to load GIF for emotion: %s", emotion);
-    //         gif_controller_.reset();
-    //     }
-    // } else {
-    //     lv_image_set_src(emoji_image_, image->image_dsc());
-    //     lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
-    //     lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
-    // }
+    // ✅ РАСКОММЕНТИРОВАНО: Отображаем GIF или статичное изображение
+    DisplayLockGuard lock(this);
+    if (image->IsGif()) {
+        // Create new GIF controller
+        gif_controller_ = std::make_unique<LvglGif>(image->image_dsc());
+        
+        if (gif_controller_->IsLoaded()) {
+            // Set up frame update callback
+            gif_controller_->SetFrameCallback([this]() {
+                lv_image_set_src(emoji_image_, gif_controller_->image_dsc());
+            });
+            
+            // Set initial frame and start animation
+            lv_image_set_src(emoji_image_, gif_controller_->image_dsc());
+            gif_controller_->Start();
+            
+            // Show GIF, hide others
+            lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            ESP_LOGE(TAG, "Failed to load GIF for emotion: %s", emotion);
+            gif_controller_.reset();
+        }
+    } else {
+        lv_image_set_src(emoji_image_, image->image_dsc());
+        lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+    }
 
 #if CONFIG_USE_WECHAT_MESSAGE_STYLE
     // In WeChat message style, if emotion is neutral, don't display it
@@ -1146,7 +1146,6 @@ void LcdDisplay::SetEmotion(const char* emotion) {
             gif_controller_->Stop();
             gif_controller_.reset();
         }
-        
         lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
     }
