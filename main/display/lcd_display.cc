@@ -1073,24 +1073,51 @@ void LcdDisplay::ClearChatMessages() {
 
 void LcdDisplay::SetEmotion(const char* emotion) {
     if (!setup_ui_called_) {
-        ESP_LOGW(TAG, "SetEmotion('%s') called before SetupUI() - emotion will not be displayed!", emotion);
-    }
-    // Stop any running GIF animation
-    if (gif_controller_) {
-        DisplayLockGuard lock(this);
-        gif_controller_->Stop();
-        // Hide image before destroying GIF controller to prevent LVGL from
-        // accessing freed image data during rendering between lock scopes
-        if (emoji_image_) {
-            lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
-        }
-        gif_controller_.reset();
+        ESP_LOGW(TAG, "SetEmotion('%s') called before SetupUI()", emotion);
+        return;
     }
     
-    if (emoji_image_ == nullptr) {
-        if (setup_ui_called_) {
-            ESP_LOGW(TAG, "SetEmotion('%s') failed: emoji_image_ is nullptr (SetupUI() was called but emoji image not created)", emotion);
+    // Вызываем kawaii_face_service для отрисовки эмоции (лицо)
+    ESP_LOGI(TAG, "SetEmotion: calling kawaii_face_set_emotion('%s')", emotion);
+    kawaii_face_set_emotion(emotion);
+    
+    // Дополнительно: пытаемся отобразить эмодзи/GIF (если настроено)
+    auto emoji_collection = static_cast<LvglTheme*>(current_theme_)->emoji_collection();
+    auto image = emoji_collection != nullptr ? emoji_collection->GetEmojiImage(emotion) : nullptr;
+    
+    if (image != nullptr && emoji_image_ != nullptr) {
+        DisplayLockGuard lock(this);
+        if (image->IsGif()) {
+            if (gif_controller_) {
+                gif_controller_->Stop();
+                gif_controller_.reset();
+            }
+            gif_controller_ = std::make_unique<LvglGif>(image->image_dsc());
+            if (gif_controller_->IsLoaded()) {
+                gif_controller_->SetFrameCallback([this]() {
+                    lv_image_set_src(emoji_image_, gif_controller_->image_dsc());
+                });
+                lv_image_set_src(emoji_image_, gif_controller_->image_dsc());
+                gif_controller_->Start();
+                lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+            }
+        } else {
+            lv_image_set_src(emoji_image_, image->image_dsc());
+            lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
         }
+    } else if (emoji_label_ != nullptr) {
+        // Если нет эмодзи/GIF, пытаемся использовать Font Awesome
+        const char* utf8 = font_awesome_get_utf8(emotion);
+        if (utf8 != nullptr) {
+            DisplayLockGuard lock(this);
+            lv_label_set_text(emoji_label_, utf8);
+            lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
         return;
     }
 
