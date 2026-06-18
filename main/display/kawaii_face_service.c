@@ -12,6 +12,7 @@ static const struct {
     face_emotion_t emotion;
 } EMOTION_MAP[] = {
     {"idle",           FACE_NEUTRAL},
+    {"neutral",        FACE_NEUTRAL},        // ← ДОБАВЛЕНО
     {"wake_word",      FACE_SURPRISED},
     {"listening",      FACE_NEUTRAL},
     {"thinking",       FACE_WORKING_HARD},
@@ -29,6 +30,8 @@ static const struct {
     {"sleepy",         FACE_SLEEPY},
     {"worried",        FACE_WORRIED},
     {"angry",          FACE_ANGRY},
+    {"gear",           FACE_WORKING_HARD},   // ← ДОБАВЛЕНО (используем WORKING_HARD как иконку шестерёнки)
+    {"microchip_ai",   FACE_WORKING_HARD},   // ← ДОБАВЛЕНО (используем WORKING_HARD как иконку чипа)
 };
 
 static esp_timer_handle_t s_reset_timer = NULL;
