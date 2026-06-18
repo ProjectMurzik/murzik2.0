@@ -1070,7 +1070,6 @@ void LcdDisplay::ClearChatMessages() {
     }
 }
 #endif
-
 void LcdDisplay::SetEmotion(const char* emotion) {
     if (!setup_ui_called_) {
         ESP_LOGW(TAG, "SetEmotion('%s') called before SetupUI()", emotion);
@@ -1118,9 +1117,6 @@ void LcdDisplay::SetEmotion(const char* emotion) {
         }
     }
 }
-        return;
-    }
-
     auto emoji_collection = static_cast<LvglTheme*>(current_theme_)->emoji_collection();
     auto image = emoji_collection != nullptr ? emoji_collection->GetEmojiImage(emotion) : nullptr;
     if (image == nullptr) {
