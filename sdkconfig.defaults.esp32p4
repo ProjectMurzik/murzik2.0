@@ -101,3 +101,6 @@ CONFIG_HTTPD_MAX_URI_HANDLERS=16
 # === 14. App Specific ===
 CONFIG_XIAOZHI_WEBSOCKET_URL="wss://api.tenclass.net/xiaozhi/v1/"
 CONFIG_LANGUAGE_RU_RU=y
+
+# === 15. Assets Configuration ===
+CONFIG_FLASH_DEFAULT_ASSETS=y
