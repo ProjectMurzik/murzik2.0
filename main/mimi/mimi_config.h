@@ -10,7 +10,7 @@
 #define MIMI_SECRET_WIFI_PASS       CONFIG_MIMI_SECRET_WIFI_PASS
 #endif
 #ifndef MIMI_SECRET_API_KEY
-#define MIMI_SECRET_API_KEY         
+#define MIMI_SECRET_API_KEY         ""   // ← ПУСТАЯ СТРОКА в кавычках!
 #endif
 #ifndef MIMI_SECRET_MODEL_PROVIDER
 #define MIMI_SECRET_MODEL_PROVIDER  CONFIG_MIMI_SECRET_MODEL_PROVIDER
@@ -84,7 +84,7 @@
 #define MIMI_AGENT_SEND_WORKING_STATUS 1
 
 /* Timezone: Asia/Shanghai for China Standard Time (UTC+8) */
-#define MIMI_TIMEZONE                "Asia/Shanghai"
+#define MIMI_TIMEZONE                "Europe/Moscow"      // Москва (UTC+3)
 
 /* LLM - DeepSeek V4 Flash (OpenAI-compatible API) */
 #define MIMI_LLM_DEFAULT_MODEL       "deepseek-v4-flash"
