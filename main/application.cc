@@ -586,31 +586,58 @@ void Application::InitializeProtocol() {
                 }
             }
             
-        } else if (strcmp(type->valuestring, "stt") == 0) {
-            auto text = cJSON_GetObjectItem(root, "text");
-            if (cJSON_IsString(text)) {
-                ESP_LOGI(TAG, ">> %s", text->valuestring);
-                Schedule([display, message = std::string(text->valuestring)]() {
-                    display->SetChatMessage("user", message.c_str());
-                    bridge_send_to_agent(message.c_str());
-                    display->SetChatMessage("assistant", "Думаю...");
-                });
+} else if (strcmp(type->valuestring, "stt") == 0) {
+    auto text = cJSON_GetObjectItem(root, "text");
+    if (cJSON_IsString(text)) {
+        std::string message = text->valuestring;
+        ESP_LOGI(TAG, ">> %s", message.c_str());
+        
+        // Определяем тип задачи
+        bool is_local_task = false;
+        
+        // Локальные ключевые слова для MimiClaw
+        static const std::vector<std::string> local_keywords = {
+            "запиши", "прочитай", "файл", "напомни",
+            "скрипт", "lua", "gpio", "датчик",
+            "включи свет", "выключи свет",
+            "переворот", "наклон"
+        };
+        
+        for (const auto& keyword : local_keywords) {
+            if (message.find(keyword) != std::string::npos) {
+                is_local_task = true;
+                break;
             }
-        } else if (strcmp(type->valuestring, "mcp") == 0) {
-            auto payload = cJSON_GetObjectItem(root, "payload");
-            if (cJSON_IsObject(payload)) {
-                McpServer::GetInstance().ParseMessage(payload);
+        }
+        
+        Schedule([display, message, is_local_task]() {
+            display->SetChatMessage("user", message.c_str());
+            
+            if (is_local_task) {
+                ESP_LOGI(TAG, "Local task detected, sending to MimiClaw");
+                bridge_send_to_agent(message.c_str());
+                display->SetChatMessage("assistant", "Думаю...");
+            } else {
+                ESP_LOGI(TAG, "Cloud task, letting server handle it");
             }
-        } else if (strcmp(type->valuestring, "system") == 0) {
-            auto command = cJSON_GetObjectItem(root, "command");
-            if (cJSON_IsString(command)) {
-                ESP_LOGI(TAG, "System command: %s", command->valuestring);
-                if (strcmp(command->valuestring, "reboot") == 0) {
-                    Schedule([this]() { Reboot(); });
-                } else {
-                    ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
-                }
-            }
+        });
+    }
+} else if (strcmp(type->valuestring, "mcp") == 0) {  // ← ПРАВИЛЬНО!
+    auto payload = cJSON_GetObjectItem(root, "payload");
+    if (cJSON_IsObject(payload)) {
+        McpServer::GetInstance().ParseMessage(payload);
+    }
+} else if (strcmp(type->valuestring, "system") == 0) {
+    auto command = cJSON_GetObjectItem(root, "command");
+    if (cJSON_IsString(command)) {
+        ESP_LOGI(TAG, "System command: %s", command->valuestring);
+        if (strcmp(command->valuestring, "reboot") == 0) {
+            Schedule([this]() { Reboot(); });
+        } else {
+            ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
+        }
+    }
+
         } else if (strcmp(type->valuestring, "alert") == 0) {
             auto status = cJSON_GetObjectItem(root, "status");
             auto message = cJSON_GetObjectItem(root, "message");
