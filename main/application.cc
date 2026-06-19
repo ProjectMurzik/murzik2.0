@@ -631,12 +631,53 @@ void Application::InitializeProtocol() {
     auto command = cJSON_GetObjectItem(root, "command");
     if (cJSON_IsString(command)) {
         ESP_LOGI(TAG, "System command: %s", command->valuestring);
+        
         if (strcmp(command->valuestring, "reboot") == 0) {
             Schedule([this]() { Reboot(); });
-        } else {
+        }
+        else if (strcmp(command->valuestring, "set_api_key") == 0) {
+            auto value = cJSON_GetObjectItem(root, "value");
+            if (cJSON_IsString(value)) {
+                extern esp_err_t llm_set_api_key(const char*);
+                llm_set_api_key(value->valuestring);
+                ESP_LOGI(TAG, "API key updated successfully");
+                Schedule([this]() {
+                    auto display = Board::GetInstance().GetDisplay();
+                    display->ShowNotification("API key saved", 3000);
+                });
+            }
+        }
+        else if (strcmp(command->valuestring, "set_model") == 0) {
+            auto value = cJSON_GetObjectItem(root, "value");
+            if (cJSON_IsString(value)) {
+                extern esp_err_t llm_set_model(const char*);
+                llm_set_model(value->valuestring);
+                ESP_LOGI(TAG, "Model updated to: %s", value->valuestring);
+            }
+        }
+        else if (strcmp(command->valuestring, "set_provider") == 0) {
+            auto value = cJSON_GetObjectItem(root, "value");
+            if (cJSON_IsString(value)) {
+                extern esp_err_t llm_set_provider(const char*);
+                llm_set_provider(value->valuestring);
+                ESP_LOGI(TAG, "Provider updated to: %s", value->valuestring);
+            }
+        }
+        else if (strcmp(command->valuestring, "set_api_url") == 0) {
+            auto provider = cJSON_GetObjectItem(root, "provider");
+            auto url = cJSON_GetObjectItem(root, "url");
+            if (cJSON_IsString(provider) && cJSON_IsString(url)) {
+                extern esp_err_t llm_set_api_url(const char*, const char*);
+                llm_set_api_url(provider->valuestring, url->valuestring);
+                ESP_LOGI(TAG, "API URL updated for %s: %s", 
+                         provider->valuestring, url->valuestring);
+            }
+        }
+        else {
             ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
         }
     }
+
 
         } else if (strcmp(type->valuestring, "alert") == 0) {
             auto status = cJSON_GetObjectItem(root, "status");
