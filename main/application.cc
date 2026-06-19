@@ -319,7 +319,6 @@ void Application::HandleNetworkDisconnectedEvent() {
 
 void Application::HandleActivationDoneEvent() {
     ESP_LOGI(TAG, "Activation done");
-
     SystemInfo::PrintHeapStats();
     SetDeviceState(kDeviceStateIdle);
 
@@ -328,7 +327,8 @@ void Application::HandleActivationDoneEvent() {
     auto display = Board::GetInstance().GetDisplay();
     std::string message = std::string(Lang::Strings::VERSION) + ota_->GetCurrentVersion();
     display->ShowNotification(message.c_str());
-    display->SetChatMessage("system", "");
+    display->SetChatMessage("system", "Hi, 喵喵");  // ← ДОБАВЛЕНО: Приветствие
+    display->SetEmotion("neutral");  // ← ДОБАВЛЕНО: Эмоция
 
     // Release OTA object after activation is complete
     ota_.reset();
