@@ -626,14 +626,13 @@ void Application::InitializeProtocol() {
     auto command = cJSON_GetObjectItem(root, "command");
     if (cJSON_IsString(command)) {
         ESP_LOGI(TAG, "System command: %s", command->valuestring);
-        
         if (strcmp(command->valuestring, "reboot") == 0) {
             Schedule([this]() { Reboot(); });
         }
         else if (strcmp(command->valuestring, "set_api_key") == 0) {
             auto value = cJSON_GetObjectItem(root, "value");
             if (cJSON_IsString(value)) {
-                std::string key_str = value->valuestring;  // ← Копируем ДО лямбды
+                std::string key_str = value->valuestring;
                 extern esp_err_t llm_set_api_key(const char*);
                 llm_set_api_key(key_str.c_str());
                 ESP_LOGI(TAG, "API key updated successfully");
@@ -648,11 +647,11 @@ void Application::InitializeProtocol() {
         else if (strcmp(command->valuestring, "set_model") == 0) {
             auto value = cJSON_GetObjectItem(root, "value");
             if (cJSON_IsString(value)) {
-                std::string model_str = value->valuestring;  // ← Копируем ДО лямбды
+                std::string model_str = value->valuestring;
                 extern esp_err_t llm_set_model(const char*);
                 llm_set_model(model_str.c_str());
                 ESP_LOGI(TAG, "Model updated to: %s", model_str.c_str());
-                Schedule([this, model_str]() {  // ← Захватываем model_str
+                Schedule([this, model_str]() {
                     auto display = Board::GetInstance().GetDisplay();
                     char msg[64];
                     snprintf(msg, sizeof(msg), "Model: %s", model_str.c_str());
@@ -665,11 +664,11 @@ void Application::InitializeProtocol() {
         else if (strcmp(command->valuestring, "set_provider") == 0) {
             auto value = cJSON_GetObjectItem(root, "value");
             if (cJSON_IsString(value)) {
-                std::string provider_str = value->valuestring;  // ← Копируем ДО лямбды
+                std::string provider_str = value->valuestring;
                 extern esp_err_t llm_set_provider(const char*);
                 llm_set_provider(provider_str.c_str());
                 ESP_LOGI(TAG, "Provider updated to: %s", provider_str.c_str());
-                Schedule([this, provider_str]() {  // ← Захватываем provider_str
+                Schedule([this, provider_str]() {
                     auto display = Board::GetInstance().GetDisplay();
                     char msg[64];
                     snprintf(msg, sizeof(msg), "Provider: %s", provider_str.c_str());
@@ -683,11 +682,11 @@ void Application::InitializeProtocol() {
             auto provider = cJSON_GetObjectItem(root, "provider");
             auto url = cJSON_GetObjectItem(root, "url");
             if (cJSON_IsString(provider) && cJSON_IsString(url)) {
-                std::string provider_str = provider->valuestring;  // ← Копируем
-                std::string url_str = url->valuestring;            // ← Копируем
+                std::string provider_str = provider->valuestring;
+                std::string url_str = url->valuestring;
                 extern esp_err_t llm_set_api_url(const char*, const char*);
                 llm_set_api_url(provider_str.c_str(), url_str.c_str());
-                ESP_LOGI(TAG, "API URL updated for %s: %s", 
+                ESP_LOGI(TAG, "API URL updated for %s: %s",
                          provider_str.c_str(), url_str.c_str());
                 Schedule([this]() {
                     auto display = Board::GetInstance().GetDisplay();
