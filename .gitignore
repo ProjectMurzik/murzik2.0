@@ -21,3 +21,10 @@ mmap_generate_*.h
 debug/
 examples/
 sdkconfig
+# ============================================
+# MimiClaw секреты (API ключи, токены)
+# ============================================
+main/mimi/mimi_config.h
+main/mimi/mimi_secrets.h
+*.secret
+*.key
