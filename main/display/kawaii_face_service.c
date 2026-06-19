@@ -32,6 +32,12 @@ static const struct {
     {"angry",          FACE_ANGRY},
     {"gear",           FACE_WORKING_HARD},   // ← ДОБАВЛЕНО (используем WORKING_HARD как иконку шестерёнки)
     {"microchip_ai",   FACE_WORKING_HARD},   // ← ДОБАВЛЕНО (используем WORKING_HARD как иконку чипа)
+    {"link", FACE_WORKING_HARD},      // Для режима активации (думает)
+    {"triangle_exclamation", FACE_WORRIED},    // Для предупреждений
+    {"circle_xmark", FACE_SAD},       // Для ошибок
+    {"download", FACE_NEUTRAL},       // Для обновления
+    {"cloud_arrow_down", FACE_NEUTRAL},  // Для загрузки ассетов
+    {"cloud_slash", FACE_SAD},        // Для ошибок сети
 };
 
 static esp_timer_handle_t s_reset_timer = NULL;
