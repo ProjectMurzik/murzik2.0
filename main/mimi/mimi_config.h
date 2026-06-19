@@ -10,7 +10,7 @@
 #define MIMI_SECRET_WIFI_PASS       CONFIG_MIMI_SECRET_WIFI_PASS
 #endif
 #ifndef MIMI_SECRET_API_KEY
-#define MIMI_SECRET_API_KEY         CONFIG_MIMI_SECRET_API_KEY
+#define MIMI_SECRET_API_KEY         "sk-e77f245a8b75463ea75edc87a577bb14"
 #endif
 #ifndef MIMI_SECRET_MODEL_PROVIDER
 #define MIMI_SECRET_MODEL_PROVIDER  CONFIG_MIMI_SECRET_MODEL_PROVIDER
@@ -86,12 +86,12 @@
 /* Timezone: Asia/Shanghai for China Standard Time (UTC+8) */
 #define MIMI_TIMEZONE                "Asia/Shanghai"
 
-/* LLM */
-#define MIMI_LLM_DEFAULT_MODEL       "claude-opus-4-5"
-#define MIMI_LLM_PROVIDER_DEFAULT    "anthropic"
+/* LLM - DeepSeek V4 Flash (OpenAI-compatible API) */
+#define MIMI_LLM_DEFAULT_MODEL       "deepseek-v4-flash"
+#define MIMI_LLM_PROVIDER_DEFAULT    "openai"
 #define MIMI_LLM_MAX_TOKENS          4096
-#define MIMI_LLM_API_URL             "https://api.anthropic.com/v1/messages"
-#define MIMI_OPENAI_API_URL          "https://api.openai.com/v1/chat/completions"
+#define MIMI_LLM_API_URL             "https://api.deepseek.com/v1/chat/completions"
+#define MIMI_OPENAI_API_URL          "https://api.deepseek.com/v1/chat/completions"
 #define MIMI_LLM_API_VERSION         "2023-06-01"
 #define MIMI_LLM_STREAM_BUF_SIZE     (32 * 1024)
 #define MIMI_LLM_LOG_VERBOSE_PAYLOAD 0
