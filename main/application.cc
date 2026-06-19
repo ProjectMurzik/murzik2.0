@@ -640,8 +640,6 @@ void Application::InitializeProtocol() {
                     auto display = Board::GetInstance().GetDisplay();
                     display->ShowNotification("API key saved", 3000);
                 });
-            } else {
-                ESP_LOGE(TAG, "set_api_key: missing 'value' parameter");
             }
         }
         else if (strcmp(command->valuestring, "set_model") == 0) {
@@ -657,8 +655,6 @@ void Application::InitializeProtocol() {
                     snprintf(msg, sizeof(msg), "Model: %s", model_str.c_str());
                     display->ShowNotification(msg, 3000);
                 });
-            } else {
-                ESP_LOGE(TAG, "set_model: missing 'value' parameter");
             }
         }
         else if (strcmp(command->valuestring, "set_provider") == 0) {
@@ -674,8 +670,6 @@ void Application::InitializeProtocol() {
                     snprintf(msg, sizeof(msg), "Provider: %s", provider_str.c_str());
                     display->ShowNotification(msg, 3000);
                 });
-            } else {
-                ESP_LOGE(TAG, "set_provider: missing 'value' parameter");
             }
         }
         else if (strcmp(command->valuestring, "set_api_url") == 0) {
@@ -692,8 +686,6 @@ void Application::InitializeProtocol() {
                     auto display = Board::GetInstance().GetDisplay();
                     display->ShowNotification("API URL updated", 3000);
                 });
-            } else {
-                ESP_LOGE(TAG, "set_api_url: missing 'provider' or 'url' parameter");
             }
         }
         else {
