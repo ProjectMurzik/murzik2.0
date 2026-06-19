@@ -622,11 +622,6 @@ void Application::InitializeProtocol() {
             }
         });
     }
-} else if (strcmp(type->valuestring, "mcp") == 0) {  // ← ПРАВИЛЬНО!
-    auto payload = cJSON_GetObjectItem(root, "payload");
-    if (cJSON_IsObject(payload)) {
-        McpServer::GetInstance().ParseMessage(payload);
-    }
 } else if (strcmp(type->valuestring, "system") == 0) {
     auto command = cJSON_GetObjectItem(root, "command");
     if (cJSON_IsString(command)) {
@@ -645,6 +640,8 @@ void Application::InitializeProtocol() {
                     auto display = Board::GetInstance().GetDisplay();
                     display->ShowNotification("API key saved", 3000);
                 });
+            } else {
+                ESP_LOGE(TAG, "set_api_key: missing 'value' parameter");
             }
         }
         else if (strcmp(command->valuestring, "set_model") == 0) {
@@ -653,6 +650,14 @@ void Application::InitializeProtocol() {
                 extern esp_err_t llm_set_model(const char*);
                 llm_set_model(value->valuestring);
                 ESP_LOGI(TAG, "Model updated to: %s", value->valuestring);
+                Schedule([this]() {
+                    auto display = Board::GetInstance().GetDisplay();
+                    char msg[64];
+                    snprintf(msg, sizeof(msg), "Model: %s", value->valuestring);
+                    display->ShowNotification(msg, 3000);
+                });
+            } else {
+                ESP_LOGE(TAG, "set_model: missing 'value' parameter");
             }
         }
         else if (strcmp(command->valuestring, "set_provider") == 0) {
@@ -661,9 +666,37 @@ void Application::InitializeProtocol() {
                 extern esp_err_t llm_set_provider(const char*);
                 llm_set_provider(value->valuestring);
                 ESP_LOGI(TAG, "Provider updated to: %s", value->valuestring);
+                Schedule([this]() {
+                    auto display = Board::GetInstance().GetDisplay();
+                    char msg[64];
+                    snprintf(msg, sizeof(msg), "Provider: %s", value->valuestring);
+                    display->ShowNotification(msg, 3000);
+                });
+            } else {
+                ESP_LOGE(TAG, "set_provider: missing 'value' parameter");
             }
         }
         else if (strcmp(command->valuestring, "set_api_url") == 0) {
+            auto provider = cJSON_GetObjectItem(root, "provider");
+            auto url = cJSON_GetObjectItem(root, "url");
+            if (cJSON_IsString(provider) && cJSON_IsString(url)) {
+                extern esp_err_t llm_set_api_url(const char*, const char*);
+                llm_set_api_url(provider->valuestring, url->valuestring);
+                ESP_LOGI(TAG, "API URL updated for %s: %s", 
+                         provider->valuestring, url->valuestring);
+                Schedule([this]() {
+                    auto display = Board::GetInstance().GetDisplay();
+                    display->ShowNotification("API URL updated", 3000);
+                });
+            } else {
+                ESP_LOGE(TAG, "set_api_url: missing 'provider' or 'url' parameter");
+            }
+        }
+        else {
+            ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
+        }
+    }
+} else if (strcmp(type->valuestring, "alert") == 0) {
             auto provider = cJSON_GetObjectItem(root, "provider");
             auto url = cJSON_GetObjectItem(root, "url");
             if (cJSON_IsString(provider) && cJSON_IsString(url)) {
