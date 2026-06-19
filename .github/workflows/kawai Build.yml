@@ -103,4 +103,5 @@ jobs:
             build/partition_table/partition-table.bin
             build/ota_data_initial.bin
             build/srmodels/srmodels.bin
+            build/generated_assets.bin 
           retention-days: 30
