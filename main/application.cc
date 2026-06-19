@@ -328,7 +328,7 @@ void Application::HandleActivationDoneEvent() {
     std::string message = std::string(Lang::Strings::VERSION) + ota_->GetCurrentVersion();
     display->ShowNotification(message.c_str());
     display->SetChatMessage("system", "Hi, 喵喵");  // ← ДОБАВЛЕНО: Приветствие
-    display->SetEmotion("neutral");  // ← ДОБАВЛЕНО: Эмоция
+    display->SetEmotion("happy"); // Мурзик будет радостно улыбаться при старте
 
     // Release OTA object after activation is complete
     ota_.reset();
