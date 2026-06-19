@@ -693,30 +693,15 @@ void Application::InitializeProtocol() {
         }
     }
 } else if (strcmp(type->valuestring, "alert") == 0) {
-            auto provider = cJSON_GetObjectItem(root, "provider");
-            auto url = cJSON_GetObjectItem(root, "url");
-            if (cJSON_IsString(provider) && cJSON_IsString(url)) {
-                extern esp_err_t llm_set_api_url(const char*, const char*);
-                llm_set_api_url(provider->valuestring, url->valuestring);
-                ESP_LOGI(TAG, "API URL updated for %s: %s", 
-                         provider->valuestring, url->valuestring);
-            }
-        }
-        else {
-            ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
-        }
+    auto status = cJSON_GetObjectItem(root, "status");
+    auto message = cJSON_GetObjectItem(root, "message");
+    auto emotion = cJSON_GetObjectItem(root, "emotion");
+    if (cJSON_IsString(status) && cJSON_IsString(message) && cJSON_IsString(emotion)) {
+        Alert(status->valuestring, message->valuestring, emotion->valuestring, Lang::Sounds::OGG_VIBRATION);
+    } else {
+        ESP_LOGW(TAG, "Alert command requires status, message and emotion");
     }
 
-
-        } else if (strcmp(type->valuestring, "alert") == 0) {
-            auto status = cJSON_GetObjectItem(root, "status");
-            auto message = cJSON_GetObjectItem(root, "message");
-            auto emotion = cJSON_GetObjectItem(root, "emotion");
-            if (cJSON_IsString(status) && cJSON_IsString(message) && cJSON_IsString(emotion)) {
-                Alert(status->valuestring, message->valuestring, emotion->valuestring, Lang::Sounds::OGG_VIBRATION);
-            } else {
-                ESP_LOGW(TAG, "Alert command requires status, message and emotion");
-            }
 #if CONFIG_RECEIVE_CUSTOM_MESSAGE
         } else if (strcmp(type->valuestring, "custom") == 0) {
             auto payload = cJSON_GetObjectItem(root, "payload");
