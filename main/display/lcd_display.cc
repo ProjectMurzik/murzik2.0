@@ -409,6 +409,17 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_font(emoji_label_, large_icon_font, 0);
     lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
     lv_label_set_text(emoji_label_, FONT_AWESOME_MICROCHIP_AI);
+        // === KAWAII FACE INITIALIZATION (ПЕРЕНЕСЕНО СЮДА) ===
+    lv_obj_t *face_panel = lv_obj_create(screen);
+    lv_obj_set_size(face_panel, 300, 300);
+    lv_obj_align(face_panel, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_opa(face_panel, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(face_panel, 0, 0);
+    lv_obj_set_style_pad_all(face_panel, 0, 0);
+    lv_obj_clear_flag(face_panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(face_panel, LV_OBJ_FLAG_IGNORE_LAYOUT); // Игнорируем flex-layout контейнера
+    kawaii_face_service_init(face_panel);
+    // ===================================================
 }
 
 #if CONFIG_IDF_TARGET_ESP32P4
@@ -760,6 +771,17 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+    // === KAWAII FACE INITIALIZATION ===
+lv_obj_t *face_panel = lv_obj_create(screen);
+lv_obj_set_size(face_panel, 300, 300);
+lv_obj_align(face_panel, LV_ALIGN_CENTER, 0, 0);
+lv_obj_set_style_bg_opa(face_panel, LV_OPA_TRANSP, 0);
+lv_obj_set_style_border_width(face_panel, 0, 0);
+lv_obj_set_style_pad_all(face_panel, 0, 0);
+lv_obj_clear_flag(face_panel, LV_OBJ_FLAG_SCROLLABLE);
+lv_obj_add_flag(face_panel, LV_OBJ_FLAG_IGNORE_LAYOUT);
+kawaii_face_service_init(face_panel);
+// ==================================
 }
 
 void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
