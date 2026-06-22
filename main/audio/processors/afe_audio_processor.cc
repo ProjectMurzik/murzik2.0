@@ -26,6 +26,9 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
     for (int i = 0; i < ref_num; i++) {
         input_format.push_back('R');
     }
+    
+    ESP_LOGI(TAG, "Input format: %s, channels: %d, ref: %d", 
+             input_format.c_str(), codec_->input_channels(), ref_num);
 
     srmodel_list_t *models;
     if (models_list == nullptr) {
@@ -34,65 +37,64 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
         models = models_list;
     }
 
-char* ns_model_name = esp_srmodel_filter(models, ESP_NSNET_PREFIX, NULL);
-char* vad_model_name = esp_srmodel_filter(models, ESP_VADN_PREFIX, NULL);
-// ✅ ДОБАВЛЕНО: Ищем модель wake word
-char* wakenet_model_name = esp_srmodel_filter(models, ESP_WN_PREFIX, NULL);
+    // Ищем только модели для VC (Voice Communication)
+    char* ns_model_name = esp_srmodel_filter(models, ESP_NSNET_PREFIX, NULL);
+    char* vad_model_name = esp_srmodel_filter(models, ESP_VADN_PREFIX, NULL);
+    
+    // ❌ УБРАНО: Wake word НЕ должен инициализироваться здесь!
+    // Wake word инициализируется ТОЛЬКО в afe_wake_word.cc
+    
+    if (ns_model_name != nullptr) {
+        ESP_LOGI(TAG, "✅ NS model found: %s", ns_model_name);
+    } else {
+        ESP_LOGW(TAG, "⚠️ NS model NOT found");
+    }
+    
+    if (vad_model_name != nullptr) {
+        ESP_LOGI(TAG, "✅ VAD model found: %s", vad_model_name);
+    } else {
+        ESP_LOGW(TAG, "⚠️ VAD model NOT found");
+    }
 
-if (wakenet_model_name != nullptr) {
-    ESP_LOGI(TAG, "✅ Wake word model found: %s", wakenet_model_name);
-} else {
-    ESP_LOGW(TAG, "⚠️ Wake word model NOT found! Wake word will not work.");
-}
+    // ✅ ПРАВИЛЬНО: AFE_TYPE_VC БЕЗ wake word
+    afe_config_t* afe_config = afe_config_init(input_format.c_str(), models, AFE_TYPE_VC, AFE_MODE_HIGH_PERF);
+    
+    // Настраиваем только NS и VAD
+    afe_config->aec_mode = AEC_MODE_VOIP_HIGH_PERF;
+    afe_config->vad_mode = VAD_MODE_0;
+    afe_config->vad_min_noise_ms = 100;
+    
+    if (vad_model_name != nullptr) {
+        afe_config->vad_model_name = vad_model_name;
+        afe_config->vad_init = true;
+    } else {
+        afe_config->vad_init = false;
+    }
 
-// ✅ ИСПРАВЛЕНО: Передаём wakenet_model_name вместо NULL
-afe_config_t* afe_config = afe_config_init(input_format.c_str(), models, AFE_TYPE_VC, AFE_MODE_HIGH_PERF);
+    if (ns_model_name != nullptr) {
+        afe_config->ns_init = true;
+        afe_config->ns_model_name = ns_model_name;
+        afe_config->afe_ns_mode = AFE_NS_MODE_NET;
+    } else {
+        afe_config->ns_init = false;
+    }
 
-// Устанавливаем wake word модель через конфигурацию
-if (wakenet_model_name != nullptr) {
-    afe_config->wakenet_model_name = wakenet_model_name;
-    afe_config->wakenet_init = true;
-    ESP_LOGI(TAG, "✅ Wake word model configured: %s", wakenet_model_name);
-} else {
+    // ❌ ВАЖНО: Wake word ОТКЛЮЧЕН в этом процессоре!
     afe_config->wakenet_init = false;
-    ESP_LOGW(TAG, "⚠️ Wake word model not found, wake word disabled");
-}
-afe_config->aec_mode = AEC_MODE_VOIP_HIGH_PERF;
-afe_config->vad_mode = VAD_MODE_0;
-afe_config->vad_min_noise_ms = 100;
-if (vad_model_name != nullptr) {
-    afe_config->vad_model_name = vad_model_name;
-}
-
-if (ns_model_name != nullptr) {
-    afe_config->ns_init = true;
-    afe_config->ns_model_name = ns_model_name;
-    afe_config->afe_ns_mode = AFE_NS_MODE_NET;
-} else {
-    afe_config->ns_init = false;
-}
-
-// ✅ ДОБАВЛЕНО: Настраиваем wake word
-if (wakenet_model_name != nullptr) {
-    afe_config->wakenet_init = true;
-    afe_config->wakenet_model_name = wakenet_model_name;
-    afe_config->wakenet_mode = DET_MODE_90;  // Чувствительность 90%
-    ESP_LOGI(TAG, "✅ Wake word configured with sensitivity DET_MODE_90");
-} else {
-    afe_config->wakenet_init = false;
-}
+    afe_config->wakenet_model_name = NULL;
 
     afe_config->agc_init = false;
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
 
 #ifdef CONFIG_USE_DEVICE_AEC
     afe_config->aec_init = true;
-    afe_config->vad_init = false;
+    afe_config->vad_init = false;  // VAD отключен при AEC
 #else
     afe_config->aec_init = false;
-    afe_config->vad_init = true;
+    // vad_init уже установлен выше
 #endif
 
+    ESP_LOGI(TAG, "Creating AFE with type VC (no wake word)");
     afe_iface_ = esp_afe_handle_from_config(afe_config);
     afe_data_ = afe_iface_->create_from_config(afe_config);
     
@@ -101,6 +103,8 @@ if (wakenet_model_name != nullptr) {
         this_->AudioProcessorTask();
         vTaskDelete(NULL);
     }, "audio_communication", 4096, this, 3, NULL);
+    
+    ESP_LOGI(TAG, "✅ AfeAudioProcessor initialized successfully");
 }
 
 AfeAudioProcessor::~AfeAudioProcessor() {
