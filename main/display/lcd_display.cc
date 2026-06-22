@@ -409,6 +409,7 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_font(emoji_label_, large_icon_font, 0);
     lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
     lv_label_set_text(emoji_label_, FONT_AWESOME_MICROCHIP_AI);
+    lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);  // ← ДОБАВЬ ЭТУ СТРОКУ
         // === KAWAII FACE INITIALIZATION (ПЕРЕНЕСЕНО СЮДА) ===
     lv_obj_t *face_panel = lv_obj_create(screen);
     lv_obj_set_size(face_panel, 300, 300);
@@ -632,7 +633,9 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_font(emoji_label_, large_icon_font, 0);
     lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
     lv_label_set_text(emoji_label_, FONT_AWESOME_MICROCHIP_AI);
-
+    lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);  // ← ДОБАВЬ ЭТУ СТРОКУ
+    lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);    // ← И эту тоже (скрыть весь бокс)
+    
     emoji_image_ = lv_img_create(emoji_box_);
     lv_obj_center(emoji_image_);
     lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
@@ -862,7 +865,16 @@ void LcdDisplay::SetEmotion(const char* emotion) {
     lvgl_port_lock(0);
     kawaii_face_set_emotion(emotion);
     lvgl_port_unlock();
-    
+    // Скрываем старые эмодзи, чтобы не перекрывали kawaii_face
+if (emoji_label_ != nullptr) {
+    lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+}
+if (emoji_image_ != nullptr) {
+    lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+}
+if (emoji_box_ != nullptr) {
+    lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+}
     // 2. Дополнительно пытаемся отобразить эмодзи/GIF из темы (если настроено)
     auto emoji_collection = static_cast<LvglTheme*>(current_theme_)->emoji_collection();
     auto image = emoji_collection != nullptr ? emoji_collection->GetEmojiImage(emotion) : nullptr;
