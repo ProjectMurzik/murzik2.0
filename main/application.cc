@@ -15,6 +15,7 @@
 extern "C" {
 #include "mimi/mimi.h"
 #include "model_path.h"  // <--- ДОБАВИТЬ ЭТУ СТРОКУ
+#include "esp_srmodel_init.h"  // ← ДОБАВЬ ЭТУ СТРОКУ
 }
 
 #include <cstring>
@@ -86,15 +87,17 @@ void Application::Initialize() {
     // Setup the audio service
     auto codec = board.GetAudioCodec();
     audio_service_.Initialize(codec);
-    
-    // === ИНИЦИАЛИЗАЦИЯ МОДЕЛЕЙ РАСПОЗНАВАНИЯ РЕЧИ ===
-    // Загружаем модели из партиции "model" во флеше
+
+    // Загружаем модели распознавания речи и передаём в AudioService
     auto models_list = esp_srmodel_init("model");
-    // Передаем список моделей в AudioService (это создаст wake_word_)
+    if (models_list != nullptr) {
     audio_service_.SetModelsList(models_list);
-    // ================================================
-    
-    audio_service_.Start();
+    ESP_LOGI(TAG, "Speech recognition models loaded successfully");
+    } else {
+    ESP_LOGE(TAG, "Failed to load speech recognition models");
+    }
+
+audio_service_.Start();
 
     AudioServiceCallbacks callbacks;
     callbacks.on_send_queue_available = [this]() {
