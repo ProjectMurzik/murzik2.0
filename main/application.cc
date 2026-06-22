@@ -77,16 +77,23 @@ bool Application::SetDeviceState(DeviceState state) {
 void Application::Initialize() {
     auto& board = Board::GetInstance();
     SetDeviceState(kDeviceStateStarting);
-
+    
     // Setup the display
     auto display = board.GetDisplay();
     display->SetupUI();
-    // Print board name/version info
     display->SetChatMessage("system", SystemInfo::GetUserAgent().c_str());
-
+    
     // Setup the audio service
     auto codec = board.GetAudioCodec();
     audio_service_.Initialize(codec);
+    
+    // === ИНИЦИАЛИЗАЦИЯ МОДЕЛЕЙ РАСПОЗНАВАНИЯ РЕЧИ ===
+    // Загружаем модели из партиции "model" во флеше
+    auto models_list = esp_srmodel_init("model");
+    // Передаем список моделей в AudioService (это создаст wake_word_)
+    audio_service_.SetModelsList(models_list);
+    // ================================================
+    
     audio_service_.Start();
 
     AudioServiceCallbacks callbacks;
