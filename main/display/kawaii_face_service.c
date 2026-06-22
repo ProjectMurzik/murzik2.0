@@ -13,6 +13,7 @@ static const struct {
 } EMOTION_MAP[] = {
     {"idle",           FACE_NEUTRAL},
     {"neutral",        FACE_NEUTRAL},        // ← ДОБАВЛЕНО
+    {"happy",          FACE_HAPPY},
     {"wake_word",      FACE_SURPRISED},
     {"listening",      FACE_NEUTRAL},
     {"thinking",       FACE_WORKING_HARD},
