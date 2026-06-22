@@ -14,6 +14,7 @@
 
 extern "C" {
 #include "mimi/mimi.h"
+#include "esp_srmodel_init.h"  // <--- ДОБАВИТЬ ЭТУ СТРОКУ
 }
 
 #include <cstring>
