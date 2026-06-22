@@ -566,18 +566,13 @@ std::unique_ptr<AudioStreamPacket> AudioService::PopWakeWordPacket() {
 }
 
 void AudioService::EnableWakeWordDetection(bool enable) {
-    ESP_LOGI(TAG, "EnableWakeWordDetection: enable=%d, wake_word_=%p", enable, wake_word_.get());
-    
     if (!wake_word_) {
-        ESP_LOGE(TAG, "wake_word_ is NULL! Cannot %s wake word detection", enable ? "enable" : "disable");
+        ESP_LOGW(TAG, "wake_word_ is NULL! Cannot %s wake word detection", enable ? "enable" : "disable");
         return;
     }
     
-    ESP_LOGD(TAG, "%s wake word detection", enable ? "Enabling" : "Disabling");
-    // ... остальной код
-}
-
-    ESP_LOGD(TAG, "%s wake word detection", enable ? "Enabling" : "Disabling");
+    ESP_LOGI(TAG, "%s wake word detection", enable ? "Enabling" : "Disabling");
+    
     if (enable) {
         if (!wake_word_initialized_) {
             if (!wake_word_->Initialize(codec_, models_list_)) {
@@ -601,7 +596,6 @@ void AudioService::EnableWakeWordDetection(bool enable) {
         xEventGroupClearBits(event_group_, AS_EVENT_WAKE_WORD_RUNNING);
     }
 }
-
 void AudioService::EnableVoiceProcessing(bool enable) {
     ESP_LOGD(TAG, "%s voice processing", enable ? "Enabling" : "Disabling");
     if (enable) {
