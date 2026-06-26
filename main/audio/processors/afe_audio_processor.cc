@@ -2,7 +2,6 @@
 #include <esp_log.h>
 
 #define PROCESSOR_RUNNING 0x01
-
 #define TAG "AfeAudioProcessor"
 
 AfeAudioProcessor::AfeAudioProcessor()
@@ -13,12 +12,9 @@ AfeAudioProcessor::AfeAudioProcessor()
 void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srmodel_list_t* models_list) {
     codec_ = codec;
     frame_samples_ = frame_duration_ms * 16000 / 1000;
-
-    // Pre-allocate output buffer capacity
     output_buffer_.reserve(frame_samples_);
 
     int ref_num = codec_->input_reference() ? 1 : 0;
-
     std::string input_format;
     for (int i = 0; i < codec_->input_channels() - ref_num; i++) {
         input_format.push_back('M');
@@ -26,9 +22,6 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
     for (int i = 0; i < ref_num; i++) {
         input_format.push_back('R');
     }
-    
-    ESP_LOGI(TAG, "Input format: %s, channels: %d, ref: %d", 
-             input_format.c_str(), codec_->input_channels(), ref_num);
 
     srmodel_list_t *models;
     if (models_list == nullptr) {
@@ -37,29 +30,18 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
         models = models_list;
     }
 
-    // Ищем только модели для VC (Voice Communication)
+    // Ищем только модели для NS и VAD
     char* ns_model_name = esp_srmodel_filter(models, ESP_NSNET_PREFIX, NULL);
     char* vad_model_name = esp_srmodel_filter(models, ESP_VADN_PREFIX, NULL);
-    
-    // ❌ УБРАНО: Wake word НЕ должен инициализироваться здесь!
-    // Wake word инициализируется ТОЛЬКО в afe_wake_word.cc
-    
-    if (ns_model_name != nullptr) {
-        ESP_LOGI(TAG, "✅ NS model found: %s", ns_model_name);
-    } else {
-        ESP_LOGW(TAG, "⚠️ NS model NOT found");
-    }
-    
-    if (vad_model_name != nullptr) {
-        ESP_LOGI(TAG, "✅ VAD model found: %s", vad_model_name);
-    } else {
-        ESP_LOGW(TAG, "⚠️ VAD model NOT found");
-    }
 
-    // ✅ ПРАВИЛЬНО: AFE_TYPE_VC БЕЗ wake word
+    ESP_LOGI(TAG, "Input format: %s, NS: %s, VAD: %s", 
+             input_format.c_str(), 
+             ns_model_name ? ns_model_name : "NULL", 
+             vad_model_name ? vad_model_name : "NULL");
+
+    // Инициализируем AFE типа VC (Voice Communication)
     afe_config_t* afe_config = afe_config_init(input_format.c_str(), models, AFE_TYPE_VC, AFE_MODE_HIGH_PERF);
     
-    // Настраиваем только NS и VAD
     afe_config->aec_mode = AEC_MODE_VOIP_HIGH_PERF;
     afe_config->vad_mode = VAD_MODE_0;
     afe_config->vad_min_noise_ms = 100;
@@ -79,7 +61,7 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
         afe_config->ns_init = false;
     }
 
-    // ❌ ВАЖНО: Wake word ОТКЛЮЧЕН в этом процессоре!
+    // ВАЖНО: Wake Word здесь НЕ инициализируем!
     afe_config->wakenet_init = false;
     afe_config->wakenet_model_name = NULL;
 
@@ -88,23 +70,19 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
 
 #ifdef CONFIG_USE_DEVICE_AEC
     afe_config->aec_init = true;
-    afe_config->vad_init = false;  // VAD отключен при AEC
+    afe_config->vad_init = false;
 #else
     afe_config->aec_init = false;
-    // vad_init уже установлен выше
 #endif
 
-    ESP_LOGI(TAG, "Creating AFE with type VC (no wake word)");
     afe_iface_ = esp_afe_handle_from_config(afe_config);
     afe_data_ = afe_iface_->create_from_config(afe_config);
-    
+
     xTaskCreate([](void* arg) {
         auto this_ = (AfeAudioProcessor*)arg;
         this_->AudioProcessorTask();
         vTaskDelete(NULL);
     }, "audio_communication", 4096, this, 3, NULL);
-    
-    ESP_LOGI(TAG, "✅ AfeAudioProcessor initialized successfully");
 }
 
 AfeAudioProcessor::~AfeAudioProcessor() {
@@ -115,22 +93,15 @@ AfeAudioProcessor::~AfeAudioProcessor() {
 }
 
 size_t AfeAudioProcessor::GetFeedSize() {
-    if (afe_data_ == nullptr) {
-        return 0;
-    }
+    if (afe_data_ == nullptr) return 0;
     return afe_iface_->get_feed_chunksize(afe_data_);
 }
 
 void AfeAudioProcessor::Feed(std::vector<int16_t>&& data) {
-    if (afe_data_ == nullptr) {
-        return;
-    }
-
+    if (afe_data_ == nullptr) return;
     std::lock_guard<std::mutex> lock(input_buffer_mutex_);
-    // Check running state inside lock to avoid TOCTOU race with Stop()
-    if (!IsRunning()) {
-        return;
-    }
+    if (!IsRunning()) return;
+    
     input_buffer_.insert(input_buffer_.end(), data.begin(), data.end());
     size_t chunk_size = afe_iface_->get_feed_chunksize(afe_data_) * codec_->input_channels();
     while (input_buffer_.size() >= chunk_size) {
@@ -145,7 +116,6 @@ void AfeAudioProcessor::Start() {
 
 void AfeAudioProcessor::Stop() {
     xEventGroupClearBits(event_group_, PROCESSOR_RUNNING);
-
     std::lock_guard<std::mutex> lock(input_buffer_mutex_);
     if (afe_data_ != nullptr) {
         afe_iface_->reset_buffer(afe_data_);
@@ -168,24 +138,18 @@ void AfeAudioProcessor::OnVadStateChange(std::function<void(bool speaking)> call
 void AfeAudioProcessor::AudioProcessorTask() {
     auto fetch_size = afe_iface_->get_fetch_chunksize(afe_data_);
     auto feed_size = afe_iface_->get_feed_chunksize(afe_data_);
-    ESP_LOGI(TAG, "Audio communication task started, feed size: %d fetch size: %d",
-        feed_size, fetch_size);
+    ESP_LOGI(TAG, "Audio communication task started, feed size: %d fetch size: %d", feed_size, fetch_size);
 
     while (true) {
         xEventGroupWaitBits(event_group_, PROCESSOR_RUNNING, pdFALSE, pdTRUE, portMAX_DELAY);
-
         auto res = afe_iface_->fetch_with_delay(afe_data_, portMAX_DELAY);
-        if ((xEventGroupGetBits(event_group_) & PROCESSOR_RUNNING) == 0) {
-            continue;
-        }
+        
+        if ((xEventGroupGetBits(event_group_) & PROCESSOR_RUNNING) == 0) continue;
         if (res == nullptr || res->ret_value == ESP_FAIL) {
-            if (res != nullptr) {
-                ESP_LOGI(TAG, "Error code: %d", res->ret_value);
-            }
+            if (res != nullptr) ESP_LOGI(TAG, "Error code: %d", res->ret_value);
             continue;
         }
 
-        // VAD state change
         if (vad_state_change_callback_) {
             if (res->vad_state == VAD_SPEECH && !is_speaking_) {
                 is_speaking_ = true;
@@ -198,19 +162,14 @@ void AfeAudioProcessor::AudioProcessorTask() {
 
         if (output_callback_) {
             size_t samples = res->data_size / sizeof(int16_t);
-            
-            // Add data to buffer
             output_buffer_.insert(output_buffer_.end(), res->data, res->data + samples);
             
-            // Output complete frames when buffer has enough data
             while (output_buffer_.size() >= frame_samples_) {
                 if (output_buffer_.size() == frame_samples_) {
-                    // If buffer size equals frame size, move the entire buffer
                     output_callback_(std::move(output_buffer_));
                     output_buffer_.clear();
                     output_buffer_.reserve(frame_samples_);
                 } else {
-                    // If buffer size exceeds frame size, copy one frame and remove it
                     output_callback_(std::vector<int16_t>(output_buffer_.begin(), output_buffer_.begin() + frame_samples_));
                     output_buffer_.erase(output_buffer_.begin(), output_buffer_.begin() + frame_samples_);
                 }
